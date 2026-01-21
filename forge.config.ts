@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
@@ -7,9 +8,48 @@ import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
+const getEnv = (key: string) => {
+  const value = process.env[key];
+  return value && value.trim().length > 0 ? value.trim() : undefined;
+};
+
+const macSignIdentity = getEnv('MAC_SIGN_IDENTITY');
+const macBundleId = getEnv('MAC_BUNDLE_ID') ?? 'com.example.imagewatermarktool';
+const macNotaryProfile = getEnv('MAC_NOTARIZE_PROFILE');
+const macNotaryAppleId = getEnv('MAC_NOTARIZE_APPLE_ID');
+const macNotaryPassword = getEnv('MAC_NOTARIZE_PASSWORD');
+const macTeamId = getEnv('MAC_TEAM_ID');
+
+const osxSign = macSignIdentity
+  ? {
+      identity: macSignIdentity,
+      hardenedRuntime: true,
+      entitlements: 'build/entitlements.mac.plist',
+      entitlementsInherit: 'build/entitlements.mac.plist',
+      gatekeeperAssess: false,
+    }
+  : undefined;
+
+const osxNotarize = macNotaryProfile
+  ? {
+      tool: 'notarytool',
+      notarytoolProfile: macNotaryProfile,
+    }
+  : macNotaryAppleId && macNotaryPassword && macTeamId
+    ? {
+        tool: 'notarytool',
+        appleId: macNotaryAppleId,
+        appleIdPassword: macNotaryPassword,
+        teamId: macTeamId,
+      }
+    : undefined;
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    appBundleId: macBundleId,
+    osxSign,
+    osxNotarize,
   },
   rebuildConfig: {},
   makers: [
