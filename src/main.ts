@@ -389,7 +389,6 @@ ipcMain.handle('theme:set', (_event: Electron.IpcMainInvokeEvent, theme: ThemeMo
 ipcMain.handle('file:readExif', async (_event: Electron.IpcMainInvokeEvent, filePath: string) => {
   try {
     // Basic EXIF reading - for full support consider adding exif-parser or similar
-    const buffer = await fs.promises.readFile(filePath);
     const stats = await fs.promises.stat(filePath);
     
     // Return basic file info if EXIF parsing is not available

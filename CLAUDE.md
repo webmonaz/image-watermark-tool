@@ -108,7 +108,7 @@ npm run package
 npm run make
 
 # Lint code
-npm run lint
+npm run eslint
 ```
 
 ## UI/UX Guidelines

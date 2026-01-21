@@ -51,14 +51,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   zoomStep: 25,
 };
 
-// Preview quality size mappings
-const QUALITY_SIZES: Record<PreviewQuality, number> = {
-  'performance': 800,
-  'balanced': 1200,
-  'quality': 2400,
-  'full': 99999, // Use original
-};
-
 interface AppState {
   images: ImageItem[];
   selectedImageId: string | null;
@@ -205,8 +197,6 @@ const PREVIEW_SIZE = 1200;   // Max dimension for preview area
 // Image Cache for Performance
 // ============================================================================
 
-// Cache loaded Image objects to avoid re-decoding
-const imageCache = new Map<string, HTMLImageElement>();
 // Cache for watermark image (shared across all images)
 let cachedWatermarkImage: HTMLImageElement | null = null;
 
@@ -216,24 +206,6 @@ let cachedWatermarkImage: HTMLImageElement | null = null;
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
-
-function loadImage(dataUrl: string): Promise<HTMLImageElement> {
-  // Check cache first
-  const cached = imageCache.get(dataUrl);
-  if (cached) {
-    return Promise.resolve(cached);
-  }
-  
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      // Don't cache full-size images (too much memory), only thumbnails/previews
-      resolve(img);
-    };
-    img.onerror = reject;
-    img.src = dataUrl;
-  });
 }
 
 function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
@@ -968,9 +940,14 @@ function applyWatermarkSettingsToAll(): void {
     });
     
     // Push to undo stack
+    const previousSettings = allPreviousSettings.get(selectedImage.id);
+    if (!previousSettings) {
+      return;
+    }
+
     pushToUndoStack({
       type: 'all',
-      previousSettings: allPreviousSettings.get(selectedImage.id)!,
+      previousSettings,
       newSettings: newSettings,
       allPreviousSettings,
     });
@@ -986,7 +963,7 @@ function applyWatermarkSettingsToAll(): void {
 
 function updateSelectedImageWatermarkSettings(
   updater: (settings: WatermarkSettings) => void,
-  saveToUndo: boolean = true
+  saveToUndo = true
 ): void {
   const selectedImage = getSelectedImage();
   if (!selectedImage) return;
@@ -1540,7 +1517,7 @@ function updateWindowTitle(): void {
 /**
  * Save the current project
  */
-async function saveProject(saveAs: boolean = false): Promise<void> {
+async function saveProject(saveAs = false): Promise<void> {
   if (state.images.length === 0) {
     alert('No images to save. Add some images first.');
     return;
