@@ -298,15 +298,11 @@
             </div>
 
             <div class="control-group">
-              <label>Export Folder</label>
-              <div class="help-text">Where to save your watermarked images</div>
-              <button id="btn-select-folder" class="btn btn-secondary">
-                Select Folder...
-              </button>
-              <div id="export-folder-path" class="folder-path">
-                No folder selected
-              </div>
+              <label for="export-scale">Resolution: <span id="export-scale-value">100</span>%</label>
+              <div class="help-text">Scale output size for presets and original exports</div>
+              <input type="range" id="export-scale" min="25" max="200" value="100" />
             </div>
+
           </div>
         </aside>
       </main>
@@ -371,6 +367,22 @@
                 </select>
               </div>
             </div>
+
+            <!-- Watermark Defaults -->
+            <div class="settings-section">
+              <h4>Watermark Defaults</h4>
+              <div class="control-group">
+                <label for="setting-default-position">Default Position</label>
+                <select id="setting-default-position">
+                  <option value="bottom-right">Bottom Right (Recommended)</option>
+                  <option value="bottom-left">Bottom Left</option>
+                  <option value="top-right">Top Right</option>
+                  <option value="top-left">Top Left</option>
+                  <option value="center">Center</option>
+                  <option value="custom">Custom (Drag to position)</option>
+                </select>
+              </div>
+            </div>
             
             <!-- Default Export Settings -->
             <div class="settings-section">
@@ -386,6 +398,11 @@
               <div class="control-group">
                 <label for="setting-default-quality">Default Quality: <span id="setting-default-quality-value">85</span>%</label>
                 <input type="range" id="setting-default-quality" min="1" max="100" value="85" />
+              </div>
+              <div class="control-group">
+                <label for="setting-default-scale">Default Resolution: <span id="setting-default-scale-value">100</span>%</label>
+                <div class="help-text">Scale export size up or down for all presets</div>
+                <input type="range" id="setting-default-scale" min="25" max="200" value="100" />
               </div>
             </div>
           </div>

@@ -41,8 +41,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: 'auto',
   thumbnailQuality: 'performance',
   previewQuality: 'balanced',
+  defaultWatermarkPosition: 'bottom-right',
   defaultExportFormat: 'jpg',
   defaultExportQuality: 85,
+  defaultExportScale: 100,
   recentProjects: [],
   maxRecentProjects: 10,
   sidebarWidth: 280,
@@ -58,6 +60,7 @@ interface AppState {
   exportFormat: ExportFormat;
   exportQuality: number;
   exportFolder: string;
+  exportScale: number;
   isExporting: boolean;
   cancelExport: boolean;
   // Undo/Redo history
@@ -93,6 +96,7 @@ const state: AppState = {
   exportFormat: 'png',
   exportQuality: 85,
   exportFolder: '',
+  exportScale: 100,
   isExporting: false,
   cancelExport: false,
   undoStack: [],
@@ -171,8 +175,9 @@ const elements = {
   qualityControl: document.getElementById('quality-control') as HTMLDivElement,
   exportQuality: document.getElementById('export-quality') as HTMLInputElement,
   exportQualityValue: document.getElementById('export-quality-value') as HTMLSpanElement,
-  btnSelectFolder: document.getElementById('btn-select-folder') as HTMLButtonElement,
-  exportFolderPath: document.getElementById('export-folder-path') as HTMLDivElement,
+  exportScale: document.getElementById('export-scale') as HTMLInputElement,
+  exportScaleValue: document.getElementById('export-scale-value') as HTMLSpanElement,
+  exportFolderPath: document.getElementById('export-folder-path') as HTMLDivElement | null,
   
   // Progress overlay
   progressOverlay: document.getElementById('progress-overlay') as HTMLDivElement,
@@ -398,7 +403,7 @@ function updateUndoRedoButtons(): void {
 
 function updateImageCount(): void {
   elements.imageCount.textContent = state.images.length.toString();
-  elements.btnExportAll.disabled = state.images.length === 0 || !state.exportFolder;
+  elements.btnExportAll.disabled = state.images.length === 0;
   elements.btnExportSelected.disabled = !state.selectedImageId;
   elements.btnClearAll.disabled = state.images.length === 0;
   
@@ -654,10 +659,46 @@ function updatePreview(): void {
   // Show watermark handle for custom position
   if (image.watermarkSettings.position === 'custom') {
     elements.watermarkOverlay.style.display = 'block';
-    positionWatermarkHandle();
   } else {
     elements.watermarkOverlay.style.display = 'none';
   }
+}
+
+function getPreviewLayout(image: ImageItem): {
+  displayWidth: number;
+  displayHeight: number;
+  cropRect: { x: number; y: number; width: number; height: number };
+} {
+  const container = elements.previewContainer;
+  const maxWidth = Math.max(1, container.clientWidth - 48);
+  const maxHeight = Math.max(1, container.clientHeight - 48);
+  const aspect = image.width / image.height;
+
+  let baseWidth = maxWidth;
+  let baseHeight = maxWidth / aspect;
+
+  if (baseHeight > maxHeight) {
+    baseHeight = maxHeight;
+    baseWidth = maxHeight * aspect;
+  }
+
+  const zoomScale = state.zoom.level / 100;
+  const displayWidth = Math.max(1, Math.round(baseWidth * zoomScale));
+  const displayHeight = Math.max(1, Math.round(baseHeight * zoomScale));
+
+  const scale = displayWidth / image.width;
+  const cropArea = calculateCropArea(image.width, image.height, image.cropSettings);
+
+  return {
+    displayWidth,
+    displayHeight,
+    cropRect: {
+      x: cropArea.x * scale,
+      y: cropArea.y * scale,
+      width: cropArea.width * scale,
+      height: cropArea.height * scale,
+    },
+  };
 }
 
 function drawPreview(image: ImageItem): void {
@@ -668,36 +709,12 @@ function drawPreview(image: ImageItem): void {
   // Use previewData (pre-scaled) for better performance
   const img = new Image();
   img.onload = () => {
-    // Calculate crop area based on preview image dimensions
-    // Note: crop is calculated proportionally so it works with any size
-    const cropArea = calculateCropArea(img.width, img.height, image.cropSettings);
-    
-    // Calculate display size (fit within container)
-    const container = elements.previewContainer;
-    const maxWidth = container.clientWidth - 48; // padding
-    const maxHeight = container.clientHeight - 48;
-    
-    let displayWidth = cropArea.width;
-    let displayHeight = cropArea.height;
-    
-    if (displayWidth > maxWidth) {
-      displayHeight = (maxWidth / displayWidth) * displayHeight;
-      displayWidth = maxWidth;
-    }
-    if (displayHeight > maxHeight) {
-      displayWidth = (maxHeight / displayHeight) * displayWidth;
-      displayHeight = maxHeight;
-    }
-    
+    const { displayWidth, displayHeight, cropRect } = getPreviewLayout(image);
     canvas.width = displayWidth;
     canvas.height = displayHeight;
-    
-    // Draw cropped image
-    ctx.drawImage(
-      img,
-      cropArea.x, cropArea.y, cropArea.width, cropArea.height,
-      0, 0, displayWidth, displayHeight
-    );
+
+    // Draw full image
+    ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
     
     // Draw watermark preview using image-specific settings
     // Get watermark settings - use global watermark image if image doesn't have one
@@ -707,7 +724,33 @@ function drawPreview(image: ImageItem): void {
       imageConfig: settings.imageConfig || state.globalWatermarkSettings.imageConfig,
     };
     
-    drawWatermarkPreview(ctx, displayWidth, displayHeight, effectiveSettings);
+    // Mask crop area for non-original presets
+    if (image.cropSettings.preset !== 'original') {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.fillRect(0, 0, displayWidth, displayHeight);
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
+      ctx.restore();
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
+    ctx.clip();
+    ctx.translate(cropRect.x, cropRect.y);
+    drawWatermarkPreview(ctx, cropRect.width, cropRect.height, effectiveSettings);
+    ctx.restore();
+
+    if (image.watermarkSettings.position === 'custom') {
+      positionWatermarkHandle();
+    }
   };
   // Use previewData instead of originalData for performance
   img.src = image.previewData;
@@ -884,8 +927,9 @@ function positionWatermarkHandle(): void {
   
   if (!selectedImage) return;
   
-  const x = (selectedImage.watermarkSettings.customX / 100) * canvas.width;
-  const y = (selectedImage.watermarkSettings.customY / 100) * canvas.height;
+  const { cropRect } = getPreviewLayout(selectedImage);
+  const x = cropRect.x + (selectedImage.watermarkSettings.customX / 100) * cropRect.width;
+  const y = cropRect.y + (selectedImage.watermarkSettings.customY / 100) * cropRect.height;
   
   // Account for canvas position within container
   const canvasRect = canvas.getBoundingClientRect();
@@ -1095,13 +1139,13 @@ function updateSelectedImageWatermarkSettings(
 // Export Processing
 // ============================================================================
 
-async function ensureExportFolder(): Promise<boolean> {
-  if (state.exportFolder) return true;
-  
+async function promptForExportFolder(): Promise<boolean> {
   const result = await window.electronAPI.selectExportFolder();
   if (!result.canceled && result.folderPath) {
     state.exportFolder = result.folderPath;
-    elements.exportFolderPath.textContent = result.folderPath;
+    if (elements.exportFolderPath) {
+      elements.exportFolderPath.textContent = result.folderPath;
+    }
     updateImageCount();
     return true;
   }
@@ -1112,7 +1156,7 @@ async function ensureExportFolder(): Promise<boolean> {
 async function exportSingleImage(image: ImageItem): Promise<void> {
   if (state.isExporting) return;
   
-  const hasExportFolder = await ensureExportFolder();
+  const hasExportFolder = await promptForExportFolder();
   if (!hasExportFolder || !state.exportFolder) return;
   
   state.isExporting = true;
@@ -1160,7 +1204,10 @@ async function exportSingleImage(image: ImageItem): Promise<void> {
 }
 
 async function exportAllImages(): Promise<void> {
-  if (state.images.length === 0 || !state.exportFolder) return;
+  if (state.images.length === 0) return;
+  
+  const hasExportFolder = await promptForExportFolder();
+  if (!hasExportFolder || !state.exportFolder) return;
   
   state.isExporting = true;
   state.cancelExport = false;
@@ -1257,6 +1304,7 @@ function processImageWithWorker(image: ImageItem, workerUrl: string): Promise<Pr
       cropSettings: image.cropSettings,
       exportFormat: state.exportFormat,
       quality: state.exportQuality,
+      exportScale: state.exportScale,
     };
     
     worker.postMessage(message);
@@ -1394,10 +1442,11 @@ function setupWatermarkDragging(): void {
     
     const canvas = elements.previewCanvas;
     const canvasRect = canvas.getBoundingClientRect();
+    const { cropRect } = getPreviewLayout(selectedImage);
     
     // Calculate new position as percentage
-    const x = ((e.clientX - canvasRect.left) / canvas.width) * 100;
-    const y = ((e.clientY - canvasRect.top) / canvas.height) * 100;
+    const x = ((e.clientX - canvasRect.left - cropRect.x) / cropRect.width) * 100;
+    const y = ((e.clientY - canvasRect.top - cropRect.y) / cropRect.height) * 100;
     
     // Clamp to 0-100
     selectedImage.watermarkSettings.customX = Math.max(0, Math.min(100, x));
@@ -1649,15 +1698,12 @@ function setupEventListeners(): void {
     state.exportQuality = value;
     elements.exportQualityValue.textContent = value.toString();
   });
-  
-  // Select export folder
-  elements.btnSelectFolder.addEventListener('click', async () => {
-    const result = await window.electronAPI.selectExportFolder();
-    if (!result.canceled && result.folderPath) {
-      state.exportFolder = result.folderPath;
-      elements.exportFolderPath.textContent = result.folderPath;
-      updateImageCount(); // Updates export button state
-    }
+
+  // Export scale
+  elements.exportScale.addEventListener('input', () => {
+    const value = parseInt(elements.exportScale.value);
+    state.exportScale = value;
+    elements.exportScaleValue.textContent = value.toString();
   });
   
   // Cancel export
@@ -1718,6 +1764,7 @@ async function saveProject(saveAs = false): Promise<void> {
       globalWatermarkSettings: state.globalWatermarkSettings,
       exportFormat: state.exportFormat,
       exportQuality: state.exportQuality,
+      exportScale: state.exportScale,
     },
     images: state.images.map(img => ({
       id: img.id,
@@ -1778,6 +1825,7 @@ async function openProject(): Promise<void> {
     state.globalWatermarkSettings = projectData.settings.globalWatermarkSettings;
     state.exportFormat = projectData.settings.exportFormat;
     state.exportQuality = projectData.settings.exportQuality;
+    state.exportScale = projectData.settings.exportScale ?? state.settings.defaultExportScale;
     
     // Load images - check if files still exist
     const missingFiles: string[] = [];
@@ -1880,6 +1928,8 @@ function syncExportSettingsUI(): void {
   elements.exportFormat.value = state.exportFormat;
   elements.exportQuality.value = state.exportQuality.toString();
   elements.exportQualityValue.textContent = state.exportQuality.toString();
+  elements.exportScale.value = state.exportScale.toString();
+  elements.exportScaleValue.textContent = state.exportScale.toString();
   
   // Show/hide quality slider for PNG
   if (state.exportFormat === 'png') {
@@ -1905,8 +1955,10 @@ async function loadSettings(): Promise<void> {
   
   // Apply other settings
   state.zoom.level = settings.defaultZoom;
+  state.globalWatermarkSettings.position = settings.defaultWatermarkPosition;
   state.exportFormat = settings.defaultExportFormat;
   state.exportQuality = settings.defaultExportQuality;
+  state.exportScale = settings.defaultExportScale;
 }
 
 /**
@@ -1944,16 +1996,24 @@ function showSettingsModal(): void {
     // Populate settings values
     const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement;
     const previewQualitySelect = document.getElementById('setting-preview-quality') as HTMLSelectElement;
+    const defaultPositionSelect = document.getElementById('setting-default-position') as HTMLSelectElement;
     const defaultFormatSelect = document.getElementById('setting-default-format') as HTMLSelectElement;
     const defaultQualityInput = document.getElementById('setting-default-quality') as HTMLInputElement;
+    const defaultScaleInput = document.getElementById('setting-default-scale') as HTMLInputElement;
     
     if (themeSelect) themeSelect.value = state.settings.theme;
     if (previewQualitySelect) previewQualitySelect.value = state.settings.previewQuality;
+    if (defaultPositionSelect) defaultPositionSelect.value = state.settings.defaultWatermarkPosition;
     if (defaultFormatSelect) defaultFormatSelect.value = state.settings.defaultExportFormat;
     if (defaultQualityInput) {
       defaultQualityInput.value = state.settings.defaultExportQuality.toString();
       const qualityValue = document.getElementById('setting-default-quality-value');
       if (qualityValue) qualityValue.textContent = state.settings.defaultExportQuality.toString();
+    }
+    if (defaultScaleInput) {
+      defaultScaleInput.value = state.settings.defaultExportScale.toString();
+      const scaleValue = document.getElementById('setting-default-scale-value');
+      if (scaleValue) scaleValue.textContent = state.settings.defaultExportScale.toString();
     }
     
     modal.style.display = 'flex';
@@ -1976,8 +2036,10 @@ function hideSettingsModal(): void {
 function saveSettingsFromModal(): void {
   const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement;
   const previewQualitySelect = document.getElementById('setting-preview-quality') as HTMLSelectElement;
+  const defaultPositionSelect = document.getElementById('setting-default-position') as HTMLSelectElement;
   const defaultFormatSelect = document.getElementById('setting-default-format') as HTMLSelectElement;
   const defaultQualityInput = document.getElementById('setting-default-quality') as HTMLInputElement;
+  const defaultScaleInput = document.getElementById('setting-default-scale') as HTMLInputElement;
   
   if (themeSelect) {
     state.settings.theme = themeSelect.value as 'light' | 'dark' | 'auto';
@@ -1986,14 +2048,23 @@ function saveSettingsFromModal(): void {
   if (previewQualitySelect) {
     state.settings.previewQuality = previewQualitySelect.value as PreviewQuality;
   }
+  if (defaultPositionSelect) {
+    state.settings.defaultWatermarkPosition = defaultPositionSelect.value as WatermarkPosition;
+    state.globalWatermarkSettings.position = state.settings.defaultWatermarkPosition;
+  }
   if (defaultFormatSelect) {
     state.settings.defaultExportFormat = defaultFormatSelect.value as 'png' | 'jpg' | 'webp';
   }
   if (defaultQualityInput) {
     state.settings.defaultExportQuality = parseInt(defaultQualityInput.value);
   }
+  if (defaultScaleInput) {
+    state.settings.defaultExportScale = parseInt(defaultScaleInput.value);
+    state.exportScale = state.settings.defaultExportScale;
+  }
   
   saveSettings();
+  syncExportSettingsUI();
   hideSettingsModal();
 }
 
@@ -2230,6 +2301,7 @@ function setupSettingsModalListeners(): void {
   const btnCloseSettings = document.getElementById('btn-close-settings');
   const btnSaveSettings = document.getElementById('btn-save-settings');
   const defaultQualityInput = document.getElementById('setting-default-quality') as HTMLInputElement;
+  const defaultScaleInput = document.getElementById('setting-default-scale') as HTMLInputElement;
   
   if (btnCloseSettings) {
     btnCloseSettings.addEventListener('click', hideSettingsModal);
@@ -2242,6 +2314,14 @@ function setupSettingsModalListeners(): void {
       const qualityValue = document.getElementById('setting-default-quality-value');
       if (qualityValue) {
         qualityValue.textContent = defaultQualityInput.value;
+      }
+    });
+  }
+  if (defaultScaleInput) {
+    defaultScaleInput.addEventListener('input', () => {
+      const scaleValue = document.getElementById('setting-default-scale-value');
+      if (scaleValue) {
+        scaleValue.textContent = defaultScaleInput.value;
       }
     });
   }
@@ -2283,6 +2363,19 @@ function setupZoomControlListeners(): void {
   if (btnZoomFit) {
     btnZoomFit.addEventListener('click', zoomToFit);
   }
+
+  elements.previewContainer.addEventListener('wheel', (event) => {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const cmdOrCtrl = isMac ? event.metaKey : event.ctrlKey;
+    if (!cmdOrCtrl) return;
+
+    event.preventDefault();
+    if (event.deltaY < 0) {
+      zoomIn();
+    } else {
+      zoomOut();
+    }
+  }, { passive: false });
 }
 
 // Start the app when DOM is ready

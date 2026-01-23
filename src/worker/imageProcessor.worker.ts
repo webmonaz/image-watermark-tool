@@ -100,22 +100,37 @@ function calculateCropArea(
 function calculateOutputDimensions(
   cropWidth: number,
   cropHeight: number,
-  cropSettings: CropSettings
+  cropSettings: CropSettings,
+  exportScale: number
 ): { width: number; height: number } {
   const preset = CROP_PRESETS[cropSettings.preset];
 
   // If preset has fixed dimensions, use them
+  let width: number;
+  let height: number;
+
   if (preset.width && preset.height) {
-    return { width: preset.width, height: preset.height };
+    width = preset.width;
+    height = preset.height;
+  } else {
+    // Otherwise, use crop dimensions (but cap at reasonable size)
+    const maxDimension = 4096;
+    const scale = Math.min(1, maxDimension / Math.max(cropWidth, cropHeight));
+    
+    width = Math.round(cropWidth * scale);
+    height = Math.round(cropHeight * scale);
   }
 
-  // Otherwise, use crop dimensions (but cap at reasonable size)
-  const maxDimension = 4096;
-  const scale = Math.min(1, maxDimension / Math.max(cropWidth, cropHeight));
-  
+  const normalizedScale = Math.min(200, Math.max(25, exportScale)) / 100;
+  width = Math.max(1, Math.round(width * normalizedScale));
+  height = Math.max(1, Math.round(height * normalizedScale));
+
+  const maxOutputDimension = 8192;
+  const finalScale = Math.min(1, maxOutputDimension / Math.max(width, height));
+
   return {
-    width: Math.round(cropWidth * scale),
-    height: Math.round(cropHeight * scale),
+    width: Math.max(1, Math.round(width * finalScale)),
+    height: Math.max(1, Math.round(height * finalScale)),
   };
 }
 
@@ -267,7 +282,8 @@ async function processImage(message: ProcessImageMessage): Promise<ProcessImageR
     const outputDims = calculateOutputDimensions(
       cropArea.width,
       cropArea.height,
-      message.cropSettings
+      message.cropSettings,
+      message.exportScale
     );
     
     // Create output canvas

@@ -168,6 +168,7 @@ export interface ExportSettings {
   quality: number;       // 1-100 (for JPG/WebP)
   outputFolder: string;
   namingPattern: string; // e.g., '{original}_watermarked'
+  scale: number;         // 1-200 (percent scale for output resolution)
 }
 
 /**
@@ -179,9 +180,12 @@ export interface AppSettings {
   // Preview quality settings
   thumbnailQuality: PreviewQuality;   // For sidebar
   previewQuality: PreviewQuality;     // For main preview area
+  // Default watermark settings
+  defaultWatermarkPosition: WatermarkPosition;
   // Default export settings
   defaultExportFormat: ExportFormat;
   defaultExportQuality: number;
+  defaultExportScale: number;
   // Recent projects
   recentProjects: string[];  // File paths
   maxRecentProjects: number;
@@ -203,6 +207,7 @@ export interface ProjectFile {
     globalWatermarkSettings: WatermarkSettings;
     exportFormat: ExportFormat;
     exportQuality: number;
+    exportScale?: number;
   };
   images: ProjectImageReference[];
 }
@@ -269,6 +274,7 @@ export interface ProcessImageMessage {
   cropSettings: CropSettings;
   exportFormat: ExportFormat;
   quality: number;
+  exportScale: number;
 }
 
 /**
