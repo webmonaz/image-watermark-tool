@@ -175,10 +175,16 @@ ipcMain.handle('file:exportImage', async (_event: Electron.IpcMainInvokeEvent, d
 }) => {
   try {
     const { base64Data, fileName, folderPath, format } = data;
+    if (!folderPath) {
+      return { success: false, error: 'Export folder is missing.' };
+    }
     
     // Remove data URL prefix if present
     const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Content, 'base64');
+    
+    await fs.promises.mkdir(folderPath, { recursive: true });
+    await fs.promises.access(folderPath, fs.constants.W_OK);
     
     // Construct output path
     const baseName = path.basename(fileName, path.extname(fileName));
@@ -191,6 +197,15 @@ ipcMain.handle('file:exportImage', async (_event: Electron.IpcMainInvokeEvent, d
     return { success: true };
   } catch (error) {
     console.error('Error exporting image:', error);
+    if (error instanceof Error && 'code' in error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'EACCES' || code === 'EPERM') {
+        return {
+          success: false,
+          error: 'Permission denied. Please choose an export folder using the picker and allow access in macOS Privacy & Security > Files and Folders.',
+        };
+      }
+    }
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',

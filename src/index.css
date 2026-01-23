@@ -338,6 +338,38 @@ body {
   background: var(--color-danger-hover);
 }
 
+/* Thumbnail context menu */
+.thumbnail-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 160px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-xs);
+}
+
+.thumbnail-context-menu button {
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--color-text);
+  text-align: left;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.thumbnail-context-menu button:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.thumbnail-context-menu button[data-action="remove"] {
+  color: var(--color-danger);
+}
+
 /* Drop zone */
 .drop-zone {
   display: flex;

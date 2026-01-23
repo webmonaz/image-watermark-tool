@@ -116,6 +116,7 @@ const state: AppState = {
 const elements = {
   // Header buttons
   btnAddImages: document.getElementById('btn-add-images') as HTMLButtonElement,
+  btnExportSelected: document.getElementById('btn-export-selected') as HTMLButtonElement,
   btnExportAll: document.getElementById('btn-export-all') as HTMLButtonElement,
   btnUndo: document.getElementById('btn-undo') as HTMLButtonElement,
   btnRedo: document.getElementById('btn-redo') as HTMLButtonElement,
@@ -199,6 +200,10 @@ const PREVIEW_SIZE = 1200;   // Max dimension for preview area
 
 // Cache for watermark image (shared across all images)
 let cachedWatermarkImage: HTMLImageElement | null = null;
+
+// Thumbnail context menu state
+let thumbnailContextMenu: HTMLDivElement | null = null;
+let contextMenuImageId: string | null = null;
 
 // ============================================================================
 // Utility Functions
@@ -394,6 +399,7 @@ function updateUndoRedoButtons(): void {
 function updateImageCount(): void {
   elements.imageCount.textContent = state.images.length.toString();
   elements.btnExportAll.disabled = state.images.length === 0 || !state.exportFolder;
+  elements.btnExportSelected.disabled = !state.selectedImageId;
   elements.btnClearAll.disabled = state.images.length === 0;
   
   // Show/hide drop zone
@@ -503,6 +509,13 @@ function createThumbnail(image: ImageItem): HTMLDivElement {
     if ((e.target as HTMLElement).classList.contains('thumbnail-remove')) return;
     selectImage(image.id);
   });
+
+  // Right-click context menu
+  div.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    selectImage(image.id);
+    showThumbnailContextMenu(e.clientX, e.clientY, image.id);
+  });
   
   // Remove button
   const removeBtn = div.querySelector('.thumbnail-remove') as HTMLButtonElement;
@@ -514,8 +527,94 @@ function createThumbnail(image: ImageItem): HTMLDivElement {
   return div;
 }
 
+function setupThumbnailContextMenu(): void {
+  if (thumbnailContextMenu) return;
+  
+  const menu = document.createElement('div');
+  menu.className = 'thumbnail-context-menu';
+  menu.style.display = 'none';
+  menu.innerHTML = `
+    <button type="button" data-action="export">Export Image</button>
+    <button type="button" data-action="remove">Remove Image</button>
+  `;
+  
+  menu.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const button = target.closest('button');
+    if (!button || !contextMenuImageId) return;
+    
+    const action = button.dataset.action;
+    const image = state.images.find((item) => item.id === contextMenuImageId);
+    
+    if (!image) {
+      hideThumbnailContextMenu();
+      return;
+    }
+    
+    if (action === 'export') {
+      exportSingleImage(image);
+    } else if (action === 'remove') {
+      removeImage(image.id);
+    }
+    
+    hideThumbnailContextMenu();
+  });
+  
+  menu.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+  });
+  
+  document.body.appendChild(menu);
+  thumbnailContextMenu = menu;
+  
+  document.addEventListener('click', (event) => {
+    if (!thumbnailContextMenu || thumbnailContextMenu.style.display === 'none') return;
+    if (thumbnailContextMenu.contains(event.target as Node)) return;
+    hideThumbnailContextMenu();
+  });
+  
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      hideThumbnailContextMenu();
+    }
+  });
+  
+  window.addEventListener('blur', hideThumbnailContextMenu);
+  elements.imageList.addEventListener('scroll', hideThumbnailContextMenu);
+}
+
+function showThumbnailContextMenu(x: number, y: number, imageId: string): void {
+  if (!thumbnailContextMenu) return;
+  
+  contextMenuImageId = imageId;
+  thumbnailContextMenu.style.display = 'block';
+  thumbnailContextMenu.style.left = `${x}px`;
+  thumbnailContextMenu.style.top = `${y}px`;
+  
+  const rect = thumbnailContextMenu.getBoundingClientRect();
+  let left = x;
+  let top = y;
+  
+  if (rect.right > window.innerWidth) {
+    left = Math.max(8, window.innerWidth - rect.width - 8);
+  }
+  if (rect.bottom > window.innerHeight) {
+    top = Math.max(8, window.innerHeight - rect.height - 8);
+  }
+  
+  thumbnailContextMenu.style.left = `${left}px`;
+  thumbnailContextMenu.style.top = `${top}px`;
+}
+
+function hideThumbnailContextMenu(): void {
+  if (!thumbnailContextMenu) return;
+  thumbnailContextMenu.style.display = 'none';
+  contextMenuImageId = null;
+}
+
 function selectImage(id: string): void {
   state.selectedImageId = id;
+  updateImageCount();
   renderImageList();
   syncUIWithSelectedImage();
   updatePreview();
@@ -996,6 +1095,70 @@ function updateSelectedImageWatermarkSettings(
 // Export Processing
 // ============================================================================
 
+async function ensureExportFolder(): Promise<boolean> {
+  if (state.exportFolder) return true;
+  
+  const result = await window.electronAPI.selectExportFolder();
+  if (!result.canceled && result.folderPath) {
+    state.exportFolder = result.folderPath;
+    elements.exportFolderPath.textContent = result.folderPath;
+    updateImageCount();
+    return true;
+  }
+  
+  return false;
+}
+
+async function exportSingleImage(image: ImageItem): Promise<void> {
+  if (state.isExporting) return;
+  
+  const hasExportFolder = await ensureExportFolder();
+  if (!hasExportFolder || !state.exportFolder) return;
+  
+  state.isExporting = true;
+  state.cancelExport = false;
+  
+  elements.progressOverlay.style.display = 'flex';
+  elements.progressBar.style.width = '0%';
+  elements.progressText.textContent = '0 of 1 images processed';
+  
+  const workerUrl = new URL('./worker/imageProcessor.worker.ts', import.meta.url);
+  
+  try {
+    const result = await processImageWithWorker(image, workerUrl.href);
+    
+    if (result.success && result.processedData) {
+      const exportResult = await window.electronAPI.exportImage({
+        base64Data: result.processedData,
+        fileName: image.fileName,
+        folderPath: state.exportFolder,
+        format: state.exportFormat,
+      });
+      
+      if (exportResult.success) {
+        image.processed = true;
+      } else {
+        image.error = exportResult.error || 'Export failed';
+      }
+    } else {
+      image.error = result.error || 'Unknown error';
+    }
+  } catch (error) {
+    image.error = error instanceof Error ? error.message : 'Unknown error';
+  }
+  
+  elements.progressBar.style.width = '100%';
+  elements.progressText.textContent = '1 of 1 images processed';
+  state.isExporting = false;
+  elements.progressOverlay.style.display = 'none';
+  
+  if (image.error) {
+    alert(`Export failed: ${image.error}`);
+  } else {
+    alert(`Export complete! 1 image saved to ${state.exportFolder}`);
+  }
+}
+
 async function exportAllImages(): Promise<void> {
   if (state.images.length === 0 || !state.exportFolder) return;
   
@@ -1011,6 +1174,7 @@ async function exportAllImages(): Promise<void> {
   const workerUrl = new URL('./worker/imageProcessor.worker.ts', import.meta.url);
   
   let processed = 0;
+  let permissionError = false;
   
   for (const image of state.images) {
     if (state.cancelExport) break;
@@ -1021,14 +1185,22 @@ async function exportAllImages(): Promise<void> {
       
       if (result.success && result.processedData) {
         // Export to file
-        await window.electronAPI.exportImage({
+        const exportResult = await window.electronAPI.exportImage({
           base64Data: result.processedData,
           fileName: image.fileName,
           folderPath: state.exportFolder,
           format: state.exportFormat,
         });
         
-        image.processed = true;
+        if (exportResult.success) {
+          image.processed = true;
+        } else {
+          image.error = exportResult.error || 'Export failed';
+          if (exportResult.error?.includes('Permission denied')) {
+            permissionError = true;
+            state.cancelExport = true;
+          }
+        }
       } else {
         image.error = result.error || 'Unknown error';
       }
@@ -1045,8 +1217,15 @@ async function exportAllImages(): Promise<void> {
   state.isExporting = false;
   elements.progressOverlay.style.display = 'none';
   
-  if (!state.cancelExport) {
-    alert(`Export complete! ${processed} images saved to ${state.exportFolder}`);
+  if (!state.cancelExport || permissionError) {
+    const errorCount = state.images.filter((item) => item.error).length;
+    if (errorCount > 0) {
+      alert(
+        `Export finished with ${errorCount} errors. Check file permissions and choose an export folder that macOS allows.`,
+      );
+    } else {
+      alert(`Export complete! ${processed} images saved to ${state.exportFolder}`);
+    }
   }
 }
 
@@ -1259,6 +1438,14 @@ function setupEventListeners(): void {
   // Export all button
   elements.btnExportAll.addEventListener('click', () => {
     exportAllImages();
+  });
+
+  // Export selected button
+  elements.btnExportSelected.addEventListener('click', () => {
+    const selectedImage = getSelectedImage();
+    if (selectedImage) {
+      exportSingleImage(selectedImage);
+    }
   });
   
   // Undo/Redo buttons
@@ -2013,6 +2200,7 @@ async function init(): Promise<void> {
   // Setup event listeners
   setupEventListeners();
   setupDragAndDrop();
+  setupThumbnailContextMenu();
   setupWatermarkDragging();
   setupKeyboardShortcuts();
   setupSettingsModalListeners();
