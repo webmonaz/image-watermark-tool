@@ -21,7 +21,7 @@ import {
   calculateCenteredCrop 
 } from '../features/crop';
 import { exportAllImages, exportSingleImage } from '../features/export';
-import { saveProject, openProject } from '../features/project';
+import { saveProject, openProject, newProject } from '../features/project';
 import { showSettingsModal } from '../features/settings';
 import { addImages } from './images';
 import type { 
@@ -316,6 +316,7 @@ export function setupEventListeners(): void {
 export function setupProjectButtonListeners(): void {
   const btnSave = document.getElementById('btn-save-project');
   const btnOpen = document.getElementById('btn-open-project');
+  const btnNew = elements.btnNewProject;
   const btnSettings = document.getElementById('btn-settings');
   const { btnAbout, aboutModal, btnCloseAbout, btnAboutClose, aboutLink } = elements;
   
@@ -324,6 +325,9 @@ export function setupProjectButtonListeners(): void {
   }
   if (btnOpen) {
     btnOpen.addEventListener('click', openProject);
+  }
+  if (btnNew) {
+    btnNew.addEventListener('click', newProject);
   }
   if (btnSettings) {
     btnSettings.addEventListener('click', showSettingsModal);

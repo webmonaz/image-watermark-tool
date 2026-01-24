@@ -130,7 +130,7 @@ body {
 
 .app-header {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr auto;
   align-items: center;
   height: var(--header-height);
   padding: 0 var(--spacing-lg);

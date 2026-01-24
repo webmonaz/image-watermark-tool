@@ -10,9 +10,10 @@ import {
   PREVIEW_SIZE 
 } from '../utils';
 import { updateUI } from './imageList';
-import { syncUIWithSelectedImage } from './preview';
+import { syncUIWithSelectedImage, setCachedWatermarkImage } from './preview';
 import { saveSettings, syncExportSettingsUI } from './settings';
-import type { ImageItem, ProjectFile } from '../../types';
+import { updateZoomDisplay } from './zoom';
+import type { ImageItem, ProjectFile, WatermarkSettings } from '../../types';
 
 // ============================================================================
 // Window Title
@@ -187,4 +188,84 @@ export async function openProject(): Promise<void> {
     console.error('Failed to parse project file:', error);
     alert('Failed to open project. The file may be corrupted.');
   }
+}
+
+// ============================================================================
+// New Project
+// ============================================================================
+
+function buildDefaultWatermarkSettings(): WatermarkSettings {
+  return {
+    type: 'image',
+    position: state.settings.defaultWatermarkPosition,
+    customX: 80,
+    customY: 80,
+    scale: 20,
+    imageConfig: undefined,
+    textConfig: {
+      text: '',
+      fontFamily: 'Arial',
+      fontSize: 24,
+      fontColor: '#ffffff',
+      opacity: 80,
+      bold: false,
+      italic: false,
+    },
+  };
+}
+
+export function newProject(): void {
+  if (state.hasUnsavedChanges && state.images.length > 0) {
+    const shouldContinue = confirm(
+      'You have unsaved changes. Do you want to start a new project without saving?'
+    );
+    if (!shouldContinue) return;
+  }
+
+  state.images = [];
+  state.selectedImageId = null;
+  state.undoStack = [];
+  state.redoStack = [];
+  state.currentProjectPath = null;
+  state.hasUnsavedChanges = false;
+
+  state.globalWatermarkSettings = buildDefaultWatermarkSettings();
+  state.exportFormat = state.settings.defaultExportFormat;
+  state.exportQuality = state.settings.defaultExportQuality;
+  state.exportScale = state.settings.defaultExportScale;
+  state.zoom.level = state.settings.defaultZoom;
+  state.zoom.panX = 0;
+  state.zoom.panY = 0;
+  state.zoom.isPanning = false;
+
+  setCachedWatermarkImage(null);
+  elements.watermarkPreview.style.display = 'none';
+  elements.watermarkPreviewImg.src = '';
+
+  elements.watermarkTypeRadios.forEach(radio => {
+    radio.checked = radio.value === 'image';
+  });
+  elements.imageWatermarkControls.style.display = 'block';
+  elements.textWatermarkControls.style.display = 'none';
+  elements.watermarkPosition.value = state.globalWatermarkSettings.position;
+  elements.watermarkScale.value = state.globalWatermarkSettings.scale.toString();
+  elements.watermarkScaleValue.textContent = state.globalWatermarkSettings.scale.toString();
+  const defaultOpacity = state.globalWatermarkSettings.textConfig?.opacity ?? 80;
+  elements.watermarkOpacity.value = defaultOpacity.toString();
+  elements.watermarkOpacityValue.textContent = defaultOpacity.toString();
+
+  if (state.globalWatermarkSettings.textConfig) {
+    elements.watermarkText.value = state.globalWatermarkSettings.textConfig.text;
+    elements.watermarkFont.value = state.globalWatermarkSettings.textConfig.fontFamily;
+    elements.watermarkColor.value = state.globalWatermarkSettings.textConfig.fontColor;
+    elements.watermarkBold.checked = state.globalWatermarkSettings.textConfig.bold;
+    elements.watermarkItalic.checked = state.globalWatermarkSettings.textConfig.italic;
+  }
+
+  elements.cropPreset.value = 'original';
+
+  updateUI();
+  syncExportSettingsUI();
+  updateWindowTitle();
+  updateZoomDisplay();
 }

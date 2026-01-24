@@ -405,7 +405,7 @@ export function capturePreviewThumbnail(image: ImageItem): void {
  * Calculate the edit status based on image settings.
  * Call this when watermark or crop settings change.
  */
-export function calculateEditStatus(image: ImageItem, initialWatermarkSettings?: WatermarkSettings): ThumbnailEditStatus {
+export function calculateEditStatus(image: ImageItem): ThumbnailEditStatus {
   // If already exported, keep that status
   if (image.editStatus === 'exported') return 'exported';
   

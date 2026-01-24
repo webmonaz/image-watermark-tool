@@ -5,7 +5,7 @@
 import { state } from '../state';
 import { undo, redo } from '../features/history';
 import { removeImage, selectPreviousImage, selectNextImage } from '../features/imageList';
-import { saveProject, openProject } from '../features/project';
+import { saveProject, openProject, newProject } from '../features/project';
 import { showSettingsModal } from '../features/settings';
 import { zoomIn, zoomOut, zoomToFit, zoomToActual } from '../features/zoom';
 
@@ -61,6 +61,13 @@ export function setupKeyboardShortcuts(): void {
     if (cmdOrCtrl && e.key === 'o') {
       e.preventDefault();
       openProject();
+      return;
+    }
+
+    // Cmd/Ctrl + N for new project
+    if (cmdOrCtrl && e.key === 'n') {
+      e.preventDefault();
+      newProject();
       return;
     }
     

@@ -4,6 +4,7 @@
 
 export const elements = {
   // Header buttons
+  btnNewProject: document.getElementById('btn-new-project') as HTMLButtonElement,
   btnAddImages: document.getElementById('btn-add-images') as HTMLButtonElement,
   btnExportSelected: document.getElementById('btn-export-selected') as HTMLButtonElement,
   btnExportAll: document.getElementById('btn-export-all') as HTMLButtonElement,
