@@ -782,6 +782,25 @@ function calculateCropArea(
   imgHeight: number,
   cropSettings: CropSettings
 ): { x: number; y: number; width: number; height: number } {
+  if (cropSettings.preset === 'original') {
+    return { x: 0, y: 0, width: imgWidth, height: imgHeight };
+  }
+
+  // For freeform and ratio-based presets, use the stored percentage values
+  // This allows user modifications (move/resize) to be reflected
+  const hasUserModifications = cropSettings.width !== 100 || cropSettings.height !== 100 ||
+                                cropSettings.x !== 0 || cropSettings.y !== 0;
+
+  if (cropSettings.preset === 'freeform' || hasUserModifications) {
+    return {
+      x: (cropSettings.x / 100) * imgWidth,
+      y: (cropSettings.y / 100) * imgHeight,
+      width: (cropSettings.width / 100) * imgWidth,
+      height: (cropSettings.height / 100) * imgHeight,
+    };
+  }
+
+  // For ratio-based presets with no user modifications, calculate centered crop
   const CROP_PRESETS: Record<CropPreset, { width?: number; height?: number; ratio?: number }> = {
     'original': {},
     'freeform': {},
@@ -796,23 +815,8 @@ function calculateCropArea(
   };
 
   const preset = CROP_PRESETS[cropSettings.preset];
-
-  if (cropSettings.preset === 'original') {
-    return { x: 0, y: 0, width: imgWidth, height: imgHeight };
-  }
-
-  if (cropSettings.preset === 'freeform') {
-    return {
-      x: (cropSettings.x / 100) * imgWidth,
-      y: (cropSettings.y / 100) * imgHeight,
-      width: (cropSettings.width / 100) * imgWidth,
-      height: (cropSettings.height / 100) * imgHeight,
-    };
-  }
-
-  // Ratio-based or fixed-size presets
   let targetRatio: number;
-  
+
   if (preset.width && preset.height) {
     targetRatio = preset.width / preset.height;
   } else if (preset.ratio) {
@@ -1502,63 +1506,145 @@ function readFileAsDataUrl(file: File): Promise<string> {
 }
 
 // ============================================================================
-// Watermark Handle Dragging
+// Watermark Handle Dragging and Resizing
 // ============================================================================
+
+// Watermark interaction state
+interface WatermarkDragState {
+  isDragging: boolean;
+  isResizing: boolean;
+  dragOffsetX: number;
+  dragOffsetY: number;
+  startScale: number;
+  startWidth: number;
+  startHeight: number;
+  startMouseX: number;
+  startMouseY: number;
+}
+
+const watermarkDragState: WatermarkDragState = {
+  isDragging: false,
+  isResizing: false,
+  dragOffsetX: 0,
+  dragOffsetY: 0,
+  startScale: 20,
+  startWidth: 0,
+  startHeight: 0,
+  startMouseX: 0,
+  startMouseY: 0,
+};
 
 function setupWatermarkDragging(): void {
   const handle = elements.watermarkHandle;
-  let isDragging = false;
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
+  const resizeHandle = handle.querySelector('.watermark-resize-handle');
 
+  // Resize handler - on the SE corner handle
+  if (resizeHandle) {
+    resizeHandle.addEventListener('mousedown', (e: Event) => {
+      const mouseEvent = e as MouseEvent;
+      const selectedImage = getSelectedImage();
+      if (!selectedImage) return;
+
+      watermarkDragState.isResizing = true;
+      watermarkDragState.isDragging = false;
+      watermarkDragState.startScale = selectedImage.watermarkSettings.scale;
+      watermarkDragState.startMouseX = mouseEvent.clientX;
+      watermarkDragState.startMouseY = mouseEvent.clientY;
+
+      // Get current watermark bounds for reference
+      const bounds = getWatermarkBounds(selectedImage);
+      if (bounds) {
+        watermarkDragState.startWidth = bounds.width;
+        watermarkDragState.startHeight = bounds.height;
+      }
+
+      handle.classList.add('dragging');
+      mouseEvent.preventDefault();
+      mouseEvent.stopPropagation();
+    });
+  }
+
+  // Drag handler - on the main handle (but not on resize handle)
   handle.addEventListener('mousedown', (e: MouseEvent) => {
+    // Skip if clicking on resize handle
+    if ((e.target as HTMLElement).classList.contains('watermark-resize-handle')) {
+      return;
+    }
+
     const selectedImage = getSelectedImage();
     if (!selectedImage) return;
 
-    isDragging = true;
+    watermarkDragState.isDragging = true;
+    watermarkDragState.isResizing = false;
     handle.classList.add('dragging');
 
     // Calculate offset from click position to watermark top-left
     const bounds = getWatermarkBounds(selectedImage);
     if (bounds) {
       const canvasRect = elements.previewCanvas.getBoundingClientRect();
-      dragOffsetX = e.clientX - canvasRect.left - bounds.x;
-      dragOffsetY = e.clientY - canvasRect.top - bounds.y;
+      watermarkDragState.dragOffsetX = e.clientX - canvasRect.left - bounds.x;
+      watermarkDragState.dragOffsetY = e.clientY - canvasRect.top - bounds.y;
     }
 
     e.preventDefault();
   });
 
   document.addEventListener('mousemove', (e: MouseEvent) => {
-    if (!isDragging) return;
-
     const selectedImage = getSelectedImage();
     if (!selectedImage) return;
 
-    const canvas = elements.previewCanvas;
-    const canvasRect = canvas.getBoundingClientRect();
-    const { cropRect } = getPreviewLayout(selectedImage);
+    if (watermarkDragState.isDragging) {
+      // Handle dragging (position change)
+      const canvas = elements.previewCanvas;
+      const canvasRect = canvas.getBoundingClientRect();
+      const { cropRect } = getPreviewLayout(selectedImage);
 
-    // Calculate new position relative to crop area, accounting for drag offset
-    const mouseX = e.clientX - canvasRect.left - dragOffsetX;
-    const mouseY = e.clientY - canvasRect.top - dragOffsetY;
+      // Calculate new position relative to crop area, accounting for drag offset
+      const mouseX = e.clientX - canvasRect.left - watermarkDragState.dragOffsetX;
+      const mouseY = e.clientY - canvasRect.top - watermarkDragState.dragOffsetY;
 
-    // Convert to percentage within crop area
-    const x = ((mouseX - cropRect.x) / cropRect.width) * 100;
-    const y = ((mouseY - cropRect.y) / cropRect.height) * 100;
+      // Convert to percentage within crop area
+      const x = ((mouseX - cropRect.x) / cropRect.width) * 100;
+      const y = ((mouseY - cropRect.y) / cropRect.height) * 100;
 
-    // Clamp to valid range (allow some overflow for edge placement)
-    selectedImage.watermarkSettings.customX = Math.max(-10, Math.min(110, x));
-    selectedImage.watermarkSettings.customY = Math.max(-10, Math.min(110, y));
+      // Clamp to valid range (allow some overflow for edge placement)
+      selectedImage.watermarkSettings.customX = Math.max(-10, Math.min(110, x));
+      selectedImage.watermarkSettings.customY = Math.max(-10, Math.min(110, y));
 
-    positionWatermarkHandle();
-    updatePreview();
+      positionWatermarkHandle();
+      updatePreview();
+    } else if (watermarkDragState.isResizing) {
+      // Handle resizing (scale change)
+      const deltaX = e.clientX - watermarkDragState.startMouseX;
+      const deltaY = e.clientY - watermarkDragState.startMouseY;
+
+      // Use the larger of the two deltas for scaling (diagonal resize)
+      const delta = Math.max(deltaX, deltaY);
+
+      // Calculate new scale based on width change
+      const scaleChange = (delta / watermarkDragState.startWidth) * watermarkDragState.startScale;
+      const newScale = watermarkDragState.startScale + scaleChange;
+
+      // Clamp scale to valid range (5-50%)
+      selectedImage.watermarkSettings.scale = Math.max(5, Math.min(50, newScale));
+
+      // Update the UI slider to reflect the new scale
+      elements.watermarkScale.value = selectedImage.watermarkSettings.scale.toString();
+      elements.watermarkScaleValue.textContent = Math.round(selectedImage.watermarkSettings.scale).toString();
+
+      // Also update global settings
+      state.globalWatermarkSettings.scale = selectedImage.watermarkSettings.scale;
+
+      positionWatermarkHandle();
+      updatePreview();
+    }
   });
 
   document.addEventListener('mouseup', () => {
-    if (isDragging) {
-      isDragging = false;
-      handle.classList.remove('dragging');
+    if (watermarkDragState.isDragging || watermarkDragState.isResizing) {
+      watermarkDragState.isDragging = false;
+      watermarkDragState.isResizing = false;
+      elements.watermarkHandle.classList.remove('dragging');
 
       // Mark unsaved changes
       const selectedImage = getSelectedImage();
@@ -1688,6 +1774,9 @@ function startCropMove(e: MouseEvent): void {
   const selectedImage = getSelectedImage();
   if (!selectedImage || selectedImage.cropSettings.preset === 'original') return;
 
+  // For ratio-based presets, ensure we have valid crop values stored
+  ensureCropValuesInitialized(selectedImage);
+
   cropDragState.isDragging = true;
   cropDragState.isResizing = false;
   cropDragState.activeHandle = 'move';
@@ -1700,12 +1789,56 @@ function startCropMove(e: MouseEvent): void {
     height: selectedImage.cropSettings.height,
   };
 
+  // Store aspect ratio for constrained movement
+  if (selectedImage.cropSettings.preset !== 'freeform') {
+    cropDragState.aspectRatio = getPresetAspectRatio(selectedImage.cropSettings.preset);
+  } else {
+    cropDragState.aspectRatio = null;
+  }
+
   document.body.style.cursor = 'move';
+}
+
+/**
+ * Ensure crop values are properly initialized for ratio-based presets
+ * This stores the calculated crop area so it can be moved/resized while keeping the ratio
+ */
+function ensureCropValuesInitialized(image: ImageItem): void {
+  // Skip if freeform - values are already user-defined
+  if (image.cropSettings.preset === 'freeform') return;
+
+  const aspectRatio = getPresetAspectRatio(image.cropSettings.preset);
+  if (aspectRatio !== null) {
+    const imgRatio = image.width / image.height;
+    const centeredCrop = calculateCenteredCrop(imgRatio, aspectRatio);
+
+    // Only initialize if at default values (centered)
+    // This allows preserving user modifications
+    const currentCenterX = image.cropSettings.x + image.cropSettings.width / 2;
+    const currentCenterY = image.cropSettings.y + image.cropSettings.height / 2;
+    const expectedCenterX = centeredCrop.x + centeredCrop.width / 2;
+    const expectedCenterY = centeredCrop.y + centeredCrop.height / 2;
+
+    // Check if values are at default centered position
+    const isDefault = Math.abs(currentCenterX - expectedCenterX) < 0.1 &&
+                      Math.abs(currentCenterY - expectedCenterY) < 0.1 &&
+                      Math.abs(image.cropSettings.width - centeredCrop.width) < 0.1;
+
+    if (isDefault || (image.cropSettings.width === 100 && image.cropSettings.height === 100)) {
+      image.cropSettings.x = centeredCrop.x;
+      image.cropSettings.y = centeredCrop.y;
+      image.cropSettings.width = centeredCrop.width;
+      image.cropSettings.height = centeredCrop.height;
+    }
+  }
 }
 
 function startCropResize(e: MouseEvent, handleType: string): void {
   const selectedImage = getSelectedImage();
   if (!selectedImage || selectedImage.cropSettings.preset === 'original') return;
+
+  // For ratio-based presets, ensure we have valid crop values stored
+  ensureCropValuesInitialized(selectedImage);
 
   cropDragState.isDragging = false;
   cropDragState.isResizing = true;

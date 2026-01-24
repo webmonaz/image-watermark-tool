@@ -134,9 +134,11 @@
               <p>No image selected</p>
               <p class="small">Add images and select one to preview</p>
             </div>
-            <!-- Draggable watermark overlay -->
+            <!-- Draggable and resizable watermark overlay -->
             <div id="watermark-overlay" class="watermark-overlay" style="display: none;">
-              <div id="watermark-handle" class="watermark-handle"></div>
+              <div id="watermark-handle" class="watermark-handle">
+                <div class="watermark-resize-handle" data-handle="se"></div>
+              </div>
             </div>
             <!-- Interactive crop overlay -->
             <div id="crop-overlay" class="crop-overlay" style="display: none;">

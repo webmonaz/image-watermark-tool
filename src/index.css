@@ -506,6 +506,37 @@ body {
   background: rgba(59, 130, 246, 0.15);
 }
 
+/* Watermark resize handle */
+.watermark-resize-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: white;
+  border: 2px solid var(--color-primary);
+  border-radius: 2px;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.watermark-resize-handle[data-handle="se"] {
+  bottom: -7px;
+  right: -7px;
+  cursor: nwse-resize;
+}
+
+.watermark-handle:hover .watermark-resize-handle,
+.watermark-handle.dragging .watermark-resize-handle {
+  display: block;
+}
+
+.watermark-handle .watermark-resize-handle {
+  display: none;
+}
+
+.watermark-handle:hover .watermark-resize-handle {
+  display: block;
+}
+
 /* Crop overlay for interactive cropping */
 .crop-overlay {
   position: absolute;
