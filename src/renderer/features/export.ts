@@ -30,6 +30,72 @@ export async function promptForExportFolder(): Promise<boolean> {
 }
 
 // ============================================================================
+// Progress Helpers
+// ============================================================================
+
+type ProgressStage = 'preparing' | 'processing' | 'saving' | 'done';
+
+function getImageLabel(count: number): string {
+  return count === 1 ? 'image' : 'images';
+}
+
+function getProgressPercent(stage: ProgressStage, completed: number, total: number): number {
+  if (total === 0) return 0;
+
+  switch (stage) {
+    case 'saving':
+      return Math.min(99, ((completed + 0.5) / total) * 100);
+    case 'processing':
+    case 'preparing':
+      return Math.min(99, (completed / total) * 100);
+    case 'done':
+    default:
+      return Math.min(100, (completed / total) * 100);
+  }
+}
+
+function formatProgressText(
+  stage: ProgressStage,
+  completed: number,
+  total: number,
+  currentIndex?: number,
+  fileName?: string
+): string {
+  const label = getImageLabel(total);
+  const fileSuffix = fileName ? ` - ${fileName}` : '';
+
+  switch (stage) {
+    case 'preparing':
+      return `Preparing ${total} ${label}...`;
+    case 'processing':
+      return `Processing ${currentIndex ?? completed + 1} of ${total} ${label}${fileSuffix}`;
+    case 'saving':
+      return `Saving ${currentIndex ?? completed + 1} of ${total} ${label}${fileSuffix}`;
+    case 'done':
+    default:
+      return `${completed} of ${total} ${label} processed`;
+  }
+}
+
+function updateProgressDisplay(
+  stage: ProgressStage,
+  completed: number,
+  total: number,
+  currentIndex?: number,
+  fileName?: string
+): void {
+  const percent = getProgressPercent(stage, completed, total);
+  elements.progressBar.style.width = `${percent}%`;
+  elements.progressText.textContent = formatProgressText(stage, completed, total, currentIndex, fileName);
+}
+
+function waitForProgressPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
+
+// ============================================================================
 // Worker Processing
 // ============================================================================
 
@@ -79,17 +145,21 @@ export async function exportSingleImage(image: ImageItem): Promise<void> {
   
   state.isExporting = true;
   state.cancelExport = false;
-  
+
   elements.progressOverlay.style.display = 'flex';
-  elements.progressBar.style.width = '0%';
-  elements.progressText.textContent = '0 of 1 images processed';
+  updateProgressDisplay('preparing', 0, 1);
+  await waitForProgressPaint();
   
   const workerUrl = new URL('../../worker/imageProcessor.worker.ts', import.meta.url);
   
   try {
+    updateProgressDisplay('processing', 0, 1, 1, image.fileName);
+    await waitForProgressPaint();
     const result = await processImageWithWorker(image, workerUrl.href);
     
     if (result.success && result.processedData) {
+      updateProgressDisplay('saving', 0, 1, 1, image.fileName);
+      await waitForProgressPaint();
       const exportResult = await window.electronAPI.exportImage({
         base64Data: result.processedData,
         fileName: image.fileName,
@@ -110,9 +180,8 @@ export async function exportSingleImage(image: ImageItem): Promise<void> {
   } catch (error) {
     image.error = error instanceof Error ? error.message : 'Unknown error';
   }
-  
-  elements.progressBar.style.width = '100%';
-  elements.progressText.textContent = '1 of 1 images processed';
+
+  updateProgressDisplay('done', 1, 1);
   state.isExporting = false;
   elements.progressOverlay.style.display = 'none';
   
@@ -135,10 +204,10 @@ export async function exportAllImages(): Promise<void> {
   
   state.isExporting = true;
   state.cancelExport = false;
-  
+
   elements.progressOverlay.style.display = 'flex';
-  elements.progressBar.style.width = '0%';
-  elements.progressText.textContent = `0 of ${state.images.length} images processed`;
+  updateProgressDisplay('preparing', 0, state.images.length);
+  await waitForProgressPaint();
   
   const workerUrl = new URL('../../worker/imageProcessor.worker.ts', import.meta.url);
   
@@ -147,11 +216,15 @@ export async function exportAllImages(): Promise<void> {
   
   for (const image of state.images) {
     if (state.cancelExport) break;
-    
+
     try {
+      updateProgressDisplay('processing', processed, state.images.length, processed + 1, image.fileName);
+      await waitForProgressPaint();
       const result = await processImageWithWorker(image, workerUrl.href);
       
       if (result.success && result.processedData) {
+        updateProgressDisplay('saving', processed, state.images.length, processed + 1, image.fileName);
+        await waitForProgressPaint();
         const exportResult = await window.electronAPI.exportImage({
           base64Data: result.processedData,
           fileName: image.fileName,
@@ -175,11 +248,9 @@ export async function exportAllImages(): Promise<void> {
     } catch (error) {
       image.error = error instanceof Error ? error.message : 'Unknown error';
     }
-    
+
     processed++;
-    const percent = (processed / state.images.length) * 100;
-    elements.progressBar.style.width = `${percent}%`;
-    elements.progressText.textContent = `${processed} of ${state.images.length} images processed`;
+    updateProgressDisplay('done', processed, state.images.length);
   }
   
   state.isExporting = false;

@@ -13,8 +13,7 @@ import {
   updateSelectedImageWatermarkSettings,
   applyWatermarkSettingsToAll,
   hideConfirmModal,
-  getConfirmCallback,
-  positionWatermarkHandle
+  getConfirmCallback
 } from '../features/watermark';
 import { 
   updateCropOverlayPosition, 
@@ -37,6 +36,8 @@ import type {
 // ============================================================================
 
 export function setupEventListeners(): void {
+  let resizeAnimationFrame: number | null = null;
+
   // Add images button
   elements.btnAddImages.addEventListener('click', async () => {
     const result = await window.electronAPI.selectImages();
@@ -297,12 +298,13 @@ export function setupEventListeners(): void {
   window.addEventListener('resize', () => {
     const selectedImage = getSelectedImage();
     if (selectedImage) {
-      if (selectedImage.watermarkSettings.position === 'custom') {
-        positionWatermarkHandle();
+      if (resizeAnimationFrame !== null) {
+        cancelAnimationFrame(resizeAnimationFrame);
       }
-      if (selectedImage.cropSettings.preset !== 'original') {
-        updateCropOverlayPosition();
-      }
+      resizeAnimationFrame = requestAnimationFrame(() => {
+        resizeAnimationFrame = null;
+        updatePreview();
+      });
     }
   });
 }
@@ -315,6 +317,7 @@ export function setupProjectButtonListeners(): void {
   const btnSave = document.getElementById('btn-save-project');
   const btnOpen = document.getElementById('btn-open-project');
   const btnSettings = document.getElementById('btn-settings');
+  const { btnAbout, aboutModal, btnCloseAbout, btnAboutClose } = elements;
   
   if (btnSave) {
     btnSave.addEventListener('click', () => saveProject(false));
@@ -324,5 +327,20 @@ export function setupProjectButtonListeners(): void {
   }
   if (btnSettings) {
     btnSettings.addEventListener('click', showSettingsModal);
+  }
+  if (btnAbout && aboutModal) {
+    btnAbout.addEventListener('click', () => {
+      aboutModal.style.display = 'flex';
+    });
+  }
+  if (aboutModal && btnCloseAbout) {
+    btnCloseAbout.addEventListener('click', () => {
+      aboutModal.style.display = 'none';
+    });
+  }
+  if (aboutModal && btnAboutClose) {
+    btnAboutClose.addEventListener('click', () => {
+      aboutModal.style.display = 'none';
+    });
   }
 }

@@ -9,6 +9,7 @@ export const elements = {
   btnExportAll: document.getElementById('btn-export-all') as HTMLButtonElement,
   btnUndo: document.getElementById('btn-undo') as HTMLButtonElement,
   btnRedo: document.getElementById('btn-redo') as HTMLButtonElement,
+  btnAbout: document.getElementById('btn-about') as HTMLButtonElement,
   
   // Image list
   imageList: document.getElementById('image-list') as HTMLDivElement,
@@ -71,6 +72,11 @@ export const elements = {
   progressBar: document.getElementById('progress-bar') as HTMLDivElement,
   progressText: document.getElementById('progress-text') as HTMLParagraphElement,
   btnCancelExport: document.getElementById('btn-cancel-export') as HTMLButtonElement,
+
+  // About modal
+  aboutModal: document.getElementById('about-modal') as HTMLDivElement,
+  btnCloseAbout: document.getElementById('btn-close-about') as HTMLButtonElement,
+  btnAboutClose: document.getElementById('btn-about-close') as HTMLButtonElement,
   
   // Confirmation modal
   confirmModal: document.getElementById('confirm-modal') as HTMLDivElement,

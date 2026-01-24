@@ -1127,7 +1127,8 @@ input[type="color"] {
   text-align: left;
 }
 
-.settings-modal .modal-header {
+.settings-modal .modal-header,
+.about-modal .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1136,7 +1137,8 @@ input[type="color"] {
   border-bottom: 1px solid var(--color-border);
 }
 
-.settings-modal .modal-header h3 {
+.settings-modal .modal-header h3,
+.about-modal .modal-header h3 {
   margin: 0;
 }
 
@@ -1185,6 +1187,47 @@ input[type="color"] {
   justify-content: flex-end;
   padding-top: var(--spacing-md);
   border-top: 1px solid var(--color-border);
+}
+
+/* ============================================================================
+   About Modal
+   ============================================================================ */
+
+.about-modal {
+  min-width: 360px;
+  max-width: 460px;
+  text-align: left;
+}
+
+.about-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.about-content p {
+  margin: 0;
+}
+
+.about-brand {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.about-text {
+  color: var(--color-text-secondary);
+}
+
+.about-link {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.about-link:hover {
+  text-decoration: underline;
 }
 
 /* ============================================================================
