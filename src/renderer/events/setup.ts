@@ -6,8 +6,8 @@ import { state, getSelectedImage, markUnsavedChanges } from '../state';
 import { elements } from '../ui/elements';
 import { deepCloneWatermarkSettings } from '../utils';
 import { undo, redo, pushToUndoStack } from '../features/history';
-import { updatePreview, capturePreviewThumbnail, updateImageEditStatus } from '../features/preview';
-import { updateUI, renderImageList } from '../features/imageList';
+import { updatePreview, updateImageEditStatus } from '../features/preview';
+import { updateUI } from '../features/imageList';
 import { 
   loadWatermarkImage, 
   updateSelectedImageWatermarkSettings,
@@ -258,12 +258,8 @@ export function setupEventListeners(): void {
       updatePreview();
       markUnsavedChanges();
       
-      // Update thumbnail after a delay to ensure canvas is redrawn
-      setTimeout(() => {
-        capturePreviewThumbnail(selectedImage);
-        updateImageEditStatus(selectedImage);
-        renderImageList();
-      }, 50);
+      // Update edit status (thumbnail will be captured on focus lost)
+      updateImageEditStatus(selectedImage);
     }
   });
   

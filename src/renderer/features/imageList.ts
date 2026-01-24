@@ -21,6 +21,9 @@ import {
 let thumbnailContextMenu: HTMLDivElement | null = null;
 let contextMenuImageId: string | null = null;
 
+// Track images being processed for thumbnail update
+const loadingThumbnails = new Set<string>();
+
 // Forward declaration for export function
 let exportSingleImageFn: ((image: ImageItem) => Promise<void>) | null = null;
 
@@ -64,6 +67,10 @@ export function renderImageList(): void {
   
   state.images.forEach(image => {
     const thumbnail = createThumbnail(image);
+    // Preserve loading state if image is currently being processed
+    if (loadingThumbnails.has(image.id)) {
+      thumbnail.classList.add('loading');
+    }
     elements.imageList.insertBefore(thumbnail, elements.dropZone);
   });
 }
@@ -211,19 +218,95 @@ function hideThumbnailContextMenu(): void {
 // Image Selection and Removal
 // ============================================================================
 
+export function setThumbnailLoading(imageId: string, isLoading: boolean): void {
+  if (isLoading) {
+    loadingThumbnails.add(imageId);
+  } else {
+    loadingThumbnails.delete(imageId);
+  }
+  // Update just that thumbnail's loading state
+  const thumbnailEl = elements.imageList.querySelector(`.image-thumbnail[data-id="${imageId}"]`);
+  if (thumbnailEl) {
+    if (isLoading) {
+      thumbnailEl.classList.add('loading');
+    } else {
+      thumbnailEl.classList.remove('loading');
+    }
+  }
+}
+
+export function updateSingleThumbnail(image: ImageItem): void {
+  const thumbnailEl = elements.imageList.querySelector(`.image-thumbnail[data-id="${image.id}"]`) as HTMLDivElement | null;
+  if (!thumbnailEl) return;
+  
+  const imgEl = thumbnailEl.querySelector('img');
+  if (imgEl && image.previewThumbnail) {
+    imgEl.src = image.previewThumbnail;
+  }
+  
+  // Update status label
+  if (state.settings.showThumbnailLabels) {
+    let labelEl = thumbnailEl.querySelector('.thumbnail-status-label') as HTMLElement | null;
+    const statusClass = getStatusLabelClass(image.editStatus);
+    const statusText = getStatusLabelText(image.editStatus);
+    const labelOpacity = state.settings.thumbnailLabelOpacity / 100;
+    
+    if (labelEl) {
+      labelEl.className = `thumbnail-status-label ${statusClass}`;
+      labelEl.textContent = statusText;
+      labelEl.style.opacity = String(labelOpacity);
+    } else if (statusText) {
+      labelEl = document.createElement('span');
+      labelEl.className = `thumbnail-status-label ${statusClass}`;
+      labelEl.textContent = statusText;
+      labelEl.style.opacity = String(labelOpacity);
+      thumbnailEl.insertBefore(labelEl, thumbnailEl.querySelector('.thumbnail-overlay'));
+    }
+  }
+  
+  // Remove loading state
+  thumbnailEl.classList.remove('loading');
+  loadingThumbnails.delete(image.id);
+}
+
 export function selectImage(id: string): void {
-  // Capture thumbnail of previously selected image before switching
+  // Capture thumbnail of previously selected image BEFORE switching
+  // This must happen synchronously while the canvas still shows the previous image
   const previousImage = state.images.find(img => img.id === state.selectedImageId);
   if (previousImage && previousImage.id !== id) {
+    // Capture immediately while canvas still shows this image
     capturePreviewThumbnail(previousImage);
     updateImageEditStatus(previousImage);
+    
+    // Show loading state briefly for visual feedback
+    setThumbnailLoading(previousImage.id, true);
+    
+    // Update the thumbnail after a brief delay for smooth transition
+    setTimeout(() => {
+      updateSingleThumbnail(previousImage);
+    }, 50);
   }
   
   state.selectedImageId = id;
   updateImageCount();
-  renderImageList();
+  
+  // Update selection state without full re-render to preserve loading states
+  updateThumbnailSelectionState();
+  
   syncUIWithSelectedImage();
   updatePreview();
+}
+
+function updateThumbnailSelectionState(): void {
+  const thumbnails = elements.imageList.querySelectorAll('.image-thumbnail');
+  thumbnails.forEach(el => {
+    const thumbnailEl = el as HTMLElement;
+    if (thumbnailEl.dataset.id === state.selectedImageId) {
+      thumbnailEl.classList.add('selected');
+    } else {
+      thumbnailEl.classList.remove('selected');
+    }
+  });
 }
 
 export function removeImage(id: string): void {

@@ -296,6 +296,43 @@ body {
   background: var(--color-bg-secondary);
 }
 
+/* Loading state for thumbnail updates */
+.image-thumbnail.loading {
+  pointer-events: none;
+}
+
+.image-thumbnail.loading::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-thumbnail.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  z-index: 6;
+  animation: thumbnail-spin 0.8s linear infinite;
+}
+
+@keyframes thumbnail-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .image-thumbnail .thumbnail-overlay {
   position: absolute;
   inset: 0;
