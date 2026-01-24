@@ -11,11 +11,18 @@ import {
 } from '../../shared/imageProcessing';
 import type { 
   ImageItem, 
-  WatermarkSettings, 
+  WatermarkSettings,
+  ThumbnailEditStatus,
 } from '../../types';
 
 // Re-export shared functions for backward compatibility
 export { CROP_PRESETS, calculateCropArea, getWatermarkPosition };
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const THUMBNAIL_CAPTURE_SIZE = 200; // Size of captured preview thumbnail
 
 // ============================================================================
 // Watermark Image Cache
@@ -344,4 +351,97 @@ export function updatePreview(): void {
   } else {
     elements.cropOverlay.style.display = 'none';
   }
+}
+
+// ============================================================================
+// Preview Thumbnail Capture
+// ============================================================================
+
+/**
+ * Capture the cropped preview as a thumbnail for the image list.
+ * This shows users what the final exported image will look like with watermark and crop applied.
+ */
+export function capturePreviewThumbnail(image: ImageItem): void {
+  const canvas = elements.previewCanvas;
+  if (canvas.width === 0 || canvas.height === 0) return;
+  
+  // Get the crop rectangle from the preview layout
+  const { cropRect } = getPreviewLayout(image);
+  
+  // If crop area is invalid, use full canvas
+  const sourceX = Math.max(0, cropRect.x);
+  const sourceY = Math.max(0, cropRect.y);
+  const sourceWidth = Math.min(cropRect.width, canvas.width - sourceX);
+  const sourceHeight = Math.min(cropRect.height, canvas.height - sourceY);
+  
+  if (sourceWidth <= 0 || sourceHeight <= 0) return;
+  
+  // Create a temporary canvas for the cropped area
+  const tempCanvas = document.createElement('canvas');
+  const aspect = sourceWidth / sourceHeight;
+  
+  if (aspect > 1) {
+    tempCanvas.width = THUMBNAIL_CAPTURE_SIZE;
+    tempCanvas.height = Math.round(THUMBNAIL_CAPTURE_SIZE / aspect);
+  } else {
+    tempCanvas.height = THUMBNAIL_CAPTURE_SIZE;
+    tempCanvas.width = Math.round(THUMBNAIL_CAPTURE_SIZE * aspect);
+  }
+  
+  const ctx = tempCanvas.getContext('2d');
+  if (!ctx) return;
+  
+  // Draw only the cropped portion from the preview canvas
+  ctx.drawImage(
+    canvas,
+    sourceX, sourceY, sourceWidth, sourceHeight,  // Source rectangle (cropped area)
+    0, 0, tempCanvas.width, tempCanvas.height      // Destination (fill thumbnail)
+  );
+  
+  image.previewThumbnail = tempCanvas.toDataURL('image/jpeg', 0.8);
+}
+
+/**
+ * Calculate the edit status based on image settings.
+ * Call this when watermark or crop settings change.
+ */
+export function calculateEditStatus(image: ImageItem, initialWatermarkSettings?: WatermarkSettings): ThumbnailEditStatus {
+  // If already exported, keep that status
+  if (image.editStatus === 'exported') return 'exported';
+  
+  const hasWatermark = image.watermarkSettings.imageConfig?.imageData || 
+                       (image.watermarkSettings.type === 'text' && image.watermarkSettings.textConfig?.text);
+  const hasCrop = image.cropSettings.preset !== 'original';
+  
+  // Check if watermark settings have been modified from defaults
+  const watermarkModified = hasWatermark || 
+    image.watermarkSettings.position !== 'bottom-right' ||
+    image.watermarkSettings.scale !== 20;
+  
+  if (watermarkModified && hasCrop) {
+    return 'edited';
+  } else if (hasCrop) {
+    return 'cropped';
+  } else if (watermarkModified) {
+    return 'watermarked';
+  }
+  
+  return 'untouched';
+}
+
+/**
+ * Update the edit status of an image and capture its preview thumbnail.
+ */
+export function updateImageEditStatus(image: ImageItem): void {
+  const newStatus = calculateEditStatus(image);
+  if (newStatus !== image.editStatus) {
+    image.editStatus = newStatus;
+  }
+}
+
+/**
+ * Mark an image as exported and update its status.
+ */
+export function markImageExported(image: ImageItem): void {
+  image.editStatus = 'exported';
 }

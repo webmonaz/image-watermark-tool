@@ -4,12 +4,14 @@
 
 import { state, markUnsavedChanges } from '../state';
 import { elements } from '../ui/elements';
-import type { ImageItem } from '../../types';
+import type { ImageItem, ThumbnailEditStatus } from '../../types';
 import { updateUndoRedoButtons } from './history';
 import { 
   updateImageCount, 
   syncUIWithSelectedImage, 
-  updatePreview 
+  updatePreview,
+  capturePreviewThumbnail,
+  updateImageEditStatus,
 } from './preview';
 
 // ============================================================================
@@ -24,6 +26,32 @@ let exportSingleImageFn: ((image: ImageItem) => Promise<void>) | null = null;
 
 export function setExportSingleImageFn(fn: (image: ImageItem) => Promise<void>): void {
   exportSingleImageFn = fn;
+}
+
+// ============================================================================
+// Status Label Helpers
+// ============================================================================
+
+function getStatusLabelText(status: ThumbnailEditStatus): string {
+  switch (status) {
+    case 'untouched': return 'New';
+    case 'watermarked': return 'Watermarked';
+    case 'cropped': return 'Cropped';
+    case 'edited': return 'Edited';
+    case 'exported': return 'Exported';
+    default: return '';
+  }
+}
+
+function getStatusLabelClass(status: ThumbnailEditStatus): string {
+  switch (status) {
+    case 'untouched': return 'status-new';
+    case 'watermarked': return 'status-watermarked';
+    case 'cropped': return 'status-cropped';
+    case 'edited': return 'status-edited';
+    case 'exported': return 'status-exported';
+    default: return '';
+  }
 }
 
 // ============================================================================
@@ -42,14 +70,28 @@ export function renderImageList(): void {
 
 function createThumbnail(image: ImageItem): HTMLDivElement {
   const div = document.createElement('div');
-  div.className = `image-thumbnail ${image.id === state.selectedImageId ? 'selected' : ''}`;
+  const isPortrait = image.height > image.width * 1.2; // 20% taller than wide = portrait
+  div.className = `image-thumbnail ${image.id === state.selectedImageId ? 'selected' : ''} ${isPortrait ? 'portrait' : ''}`;
   div.dataset.id = image.id;
   
   const hasCustomPosition = image.watermarkSettings.position === 'custom';
   const customIndicator = hasCustomPosition ? '<span class="custom-indicator" title="Custom watermark position">*</span>' : '';
   
+  // Use previewThumbnail if available (shows current edits), otherwise use original thumbnail
+  const thumbnailSrc = image.previewThumbnail || image.thumbnailData;
+  
+  // Build status label HTML if enabled
+  const showLabels = state.settings.showThumbnailLabels;
+  const labelOpacity = state.settings.thumbnailLabelOpacity / 100;
+  const statusClass = getStatusLabelClass(image.editStatus);
+  const statusText = getStatusLabelText(image.editStatus);
+  const statusLabelHtml = showLabels && statusText 
+    ? `<span class="thumbnail-status-label ${statusClass}" style="opacity: ${labelOpacity}">${statusText}</span>` 
+    : '';
+  
   div.innerHTML = `
-    <img src="${image.thumbnailData}" alt="${image.fileName}" loading="lazy" />
+    <img src="${thumbnailSrc}" alt="${image.fileName}" loading="lazy" />
+    ${statusLabelHtml}
     <div class="thumbnail-overlay">
       <span class="thumbnail-name">${image.fileName}${customIndicator}</span>
       <button class="thumbnail-remove" title="Remove image">×</button>
@@ -170,6 +212,13 @@ function hideThumbnailContextMenu(): void {
 // ============================================================================
 
 export function selectImage(id: string): void {
+  // Capture thumbnail of previously selected image before switching
+  const previousImage = state.images.find(img => img.id === state.selectedImageId);
+  if (previousImage && previousImage.id !== id) {
+    capturePreviewThumbnail(previousImage);
+    updateImageEditStatus(previousImage);
+  }
+  
   state.selectedImageId = id;
   updateImageCount();
   renderImageList();

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
+import { MakerDMG } from '@electron-forge/maker-dmg';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
 import { VitePlugin } from '@electron-forge/plugin-vite';
@@ -54,7 +55,21 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({}),
-    new MakerZIP({}, ['darwin']),
+    new MakerZIP({}, ['win32']),  // ZIP only for Windows as backup
+    new MakerDMG({
+      format: 'ULFO',  // ULFO format for better compression
+      icon: undefined,  // Will use the app icon
+      background: undefined,
+      contents: [
+        { x: 130, y: 220, type: 'file', path: '' },  // App location (path filled by Forge)
+        { x: 410, y: 220, type: 'link', path: '/Applications' }  // Applications folder
+      ],
+      additionalDMGOptions: {
+        window: {
+          size: { width: 540, height: 380 }
+        }
+      }
+    }),
     new MakerRpm({}),
     new MakerDeb({}),
   ],

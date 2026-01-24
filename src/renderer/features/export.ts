@@ -9,6 +9,8 @@ import type {
   ProcessImageMessage, 
   ProcessImageResult 
 } from '../../types';
+import { markImageExported } from './preview';
+import { renderImageList } from './imageList';
 
 // ============================================================================
 // Export Folder Selection
@@ -97,6 +99,8 @@ export async function exportSingleImage(image: ImageItem): Promise<void> {
       
       if (exportResult.success) {
         image.processed = true;
+        markImageExported(image);
+        renderImageList();
       } else {
         image.error = exportResult.error || 'Export failed';
       }
@@ -157,6 +161,7 @@ export async function exportAllImages(): Promise<void> {
         
         if (exportResult.success) {
           image.processed = true;
+          markImageExported(image);
         } else {
           image.error = exportResult.error || 'Export failed';
           if (exportResult.error?.includes('Permission denied')) {
@@ -179,6 +184,9 @@ export async function exportAllImages(): Promise<void> {
   
   state.isExporting = false;
   elements.progressOverlay.style.display = 'none';
+  
+  // Update image list to show exported status
+  renderImageList();
   
   if (!state.cancelExport || permissionError) {
     const errorCount = state.images.filter((item) => item.error).length;

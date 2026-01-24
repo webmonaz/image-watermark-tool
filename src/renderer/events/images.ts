@@ -52,6 +52,7 @@ export async function addImages(filePaths: string[]): Promise<void> {
         },
         processed: false,
         processing: false,
+        editStatus: 'untouched',
       };
       
       state.images.push(imageItem);

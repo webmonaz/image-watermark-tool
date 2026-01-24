@@ -4,7 +4,8 @@
 
 import { getSelectedImage, markUnsavedChanges } from '../state';
 import { elements } from '../ui/elements';
-import { getPreviewLayout, updatePreview } from './preview';
+import { getPreviewLayout, updatePreview, capturePreviewThumbnail, updateImageEditStatus } from './preview';
+import { renderImageList } from './imageList';
 import type { CropPreset, ImageItem } from '../../types';
 
 // ============================================================================
@@ -333,6 +334,17 @@ function handleCropMouseUp(): void {
     cropDragState.activeHandle = null;
     document.body.style.cursor = '';
     markUnsavedChanges();
+    
+    // Update thumbnail to show cropped preview
+    const selectedImage = getSelectedImage();
+    if (selectedImage) {
+      // Small delay to ensure canvas has been redrawn
+      setTimeout(() => {
+        capturePreviewThumbnail(selectedImage);
+        updateImageEditStatus(selectedImage);
+        renderImageList();
+      }, 50);
+    }
   }
 }
 

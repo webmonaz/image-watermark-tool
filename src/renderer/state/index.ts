@@ -40,6 +40,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showImageInfo: true,
   defaultZoom: 100,
   zoomStep: 25,
+  showThumbnailLabels: true,
+  thumbnailLabelOpacity: 80,
 };
 
 // ============================================================================

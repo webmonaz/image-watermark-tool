@@ -2,7 +2,7 @@
 // Settings Management
 // ============================================================================
 
-import { state } from '../state';
+import { state, DEFAULT_SETTINGS } from '../state';
 import { elements } from '../ui/elements';
 import type { 
   WatermarkPosition, 
@@ -32,16 +32,17 @@ export function applyTheme(theme: 'light' | 'dark' | 'auto'): void {
 // ============================================================================
 
 export async function loadSettings(): Promise<void> {
-  const settings = await window.electronAPI.loadSettings();
-  state.settings = settings;
+  const loadedSettings = await window.electronAPI.loadSettings();
+  // Merge with defaults to ensure new fields have values
+  state.settings = { ...DEFAULT_SETTINGS, ...loadedSettings };
   
-  applyTheme(settings.theme);
+  applyTheme(state.settings.theme);
   
-  state.zoom.level = settings.defaultZoom;
-  state.globalWatermarkSettings.position = settings.defaultWatermarkPosition;
-  state.exportFormat = settings.defaultExportFormat;
-  state.exportQuality = settings.defaultExportQuality;
-  state.exportScale = settings.defaultExportScale;
+  state.zoom.level = state.settings.defaultZoom;
+  state.globalWatermarkSettings.position = state.settings.defaultWatermarkPosition;
+  state.exportFormat = state.settings.defaultExportFormat;
+  state.exportQuality = state.settings.defaultExportQuality;
+  state.exportScale = state.settings.defaultExportScale;
 }
 
 export async function saveSettings(): Promise<void> {
@@ -79,6 +80,8 @@ export function showSettingsModal(): void {
     const defaultFormatSelect = document.getElementById('setting-default-format') as HTMLSelectElement;
     const defaultQualityInput = document.getElementById('setting-default-quality') as HTMLInputElement;
     const defaultScaleInput = document.getElementById('setting-default-scale') as HTMLInputElement;
+    const showLabelsCheckbox = document.getElementById('setting-show-labels') as HTMLInputElement;
+    const labelOpacityInput = document.getElementById('setting-label-opacity') as HTMLInputElement;
     
     if (themeSelect) themeSelect.value = state.settings.theme;
     if (previewQualitySelect) previewQualitySelect.value = state.settings.previewQuality;
@@ -93,6 +96,14 @@ export function showSettingsModal(): void {
       defaultScaleInput.value = state.settings.defaultExportScale.toString();
       const scaleValue = document.getElementById('setting-default-scale-value');
       if (scaleValue) scaleValue.textContent = state.settings.defaultExportScale.toString();
+    }
+    if (showLabelsCheckbox) {
+      showLabelsCheckbox.checked = state.settings.showThumbnailLabels;
+    }
+    if (labelOpacityInput) {
+      labelOpacityInput.value = state.settings.thumbnailLabelOpacity.toString();
+      const opacityValue = document.getElementById('setting-label-opacity-value');
+      if (opacityValue) opacityValue.textContent = state.settings.thumbnailLabelOpacity.toString();
     }
     
     modal.style.display = 'flex';
@@ -113,6 +124,8 @@ export function saveSettingsFromModal(): void {
   const defaultFormatSelect = document.getElementById('setting-default-format') as HTMLSelectElement;
   const defaultQualityInput = document.getElementById('setting-default-quality') as HTMLInputElement;
   const defaultScaleInput = document.getElementById('setting-default-scale') as HTMLInputElement;
+  const showLabelsCheckbox = document.getElementById('setting-show-labels') as HTMLInputElement;
+  const labelOpacityInput = document.getElementById('setting-label-opacity') as HTMLInputElement;
   
   if (themeSelect) {
     state.settings.theme = themeSelect.value as 'light' | 'dark' | 'auto';
@@ -135,6 +148,12 @@ export function saveSettingsFromModal(): void {
     state.settings.defaultExportScale = parseInt(defaultScaleInput.value);
     state.exportScale = state.settings.defaultExportScale;
   }
+  if (showLabelsCheckbox) {
+    state.settings.showThumbnailLabels = showLabelsCheckbox.checked;
+  }
+  if (labelOpacityInput) {
+    state.settings.thumbnailLabelOpacity = parseInt(labelOpacityInput.value);
+  }
   
   saveSettings();
   syncExportSettingsUI();
@@ -150,6 +169,7 @@ export function setupSettingsModalListeners(): void {
   const btnSaveSettings = document.getElementById('btn-save-settings');
   const defaultQualityInput = document.getElementById('setting-default-quality') as HTMLInputElement;
   const defaultScaleInput = document.getElementById('setting-default-scale') as HTMLInputElement;
+  const labelOpacityInput = document.getElementById('setting-label-opacity') as HTMLInputElement;
   
   if (btnCloseSettings) {
     btnCloseSettings.addEventListener('click', hideSettingsModal);
@@ -170,6 +190,14 @@ export function setupSettingsModalListeners(): void {
       const scaleValue = document.getElementById('setting-default-scale-value');
       if (scaleValue) {
         scaleValue.textContent = defaultScaleInput.value;
+      }
+    });
+  }
+  if (labelOpacityInput) {
+    labelOpacityInput.addEventListener('input', () => {
+      const opacityValue = document.getElementById('setting-label-opacity-value');
+      if (opacityValue) {
+        opacityValue.textContent = labelOpacityInput.value;
       }
     });
   }

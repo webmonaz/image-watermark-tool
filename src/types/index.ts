@@ -48,6 +48,16 @@ export type CropPreset =
 export type ThemeMode = 'light' | 'dark' | 'auto';
 
 /**
+ * Thumbnail edit status for visual indicators
+ * - untouched: Image has not been modified
+ * - watermarked: Watermark settings have been changed
+ * - cropped: Crop settings have been changed  
+ * - edited: Both watermark and crop have been modified
+ * - exported: Image has been exported
+ */
+export type ThumbnailEditStatus = 'untouched' | 'watermarked' | 'cropped' | 'edited' | 'exported';
+
+/**
  * Preview quality options for performance vs quality tradeoff
  */
 export type PreviewQuality = 'performance' | 'balanced' | 'quality' | 'full';
@@ -158,6 +168,10 @@ export interface ImageItem {
   processed: boolean;
   processing: boolean;
   error?: string;
+  // Edit status for thumbnail labels
+  editStatus: ThumbnailEditStatus;
+  // Preview thumbnail showing current edits (captured from canvas)
+  previewThumbnail?: string;
 }
 
 /**
@@ -195,6 +209,9 @@ export interface AppSettings {
   // Zoom settings
   defaultZoom: number;  // 100 = 100%
   zoomStep: number;     // How much to zoom per step (e.g., 25 = 25%)
+  // Thumbnail label settings
+  showThumbnailLabels: boolean;  // Show status labels on thumbnails
+  thumbnailLabelOpacity: number; // Opacity of labels (0-100)
 }
 
 /**
