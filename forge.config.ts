@@ -60,10 +60,6 @@ const config: ForgeConfig = {
       format: 'ULFO',  // ULFO format for better compression
       icon: undefined,  // Will use the app icon
       background: undefined,
-      contents: [
-        { x: 130, y: 220, type: 'file', path: '' },  // App location (path filled by Forge)
-        { x: 410, y: 220, type: 'link', path: '/Applications' }  // Applications folder
-      ],
       additionalDMGOptions: {
         window: {
           size: { width: 540, height: 380 }
