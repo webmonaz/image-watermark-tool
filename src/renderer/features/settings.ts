@@ -4,6 +4,7 @@
 
 import { state, DEFAULT_SETTINGS } from '../state';
 import { elements } from '../ui/elements';
+import { updateUI } from './imageList';
 import type { 
   WatermarkPosition, 
   ExportFormat, 
@@ -71,6 +72,29 @@ export function syncExportSettingsUI(): void {
 // Settings Modal
 // ============================================================================
 
+const DEFAULT_SETTINGS_PANEL = 'settings-appearance';
+let activeSettingsPanel = DEFAULT_SETTINGS_PANEL;
+
+function setActiveSettingsPanel(panelId: string): void {
+  const navItems = document.querySelectorAll('.settings-nav-item');
+  const panels = document.querySelectorAll('.settings-panel');
+  const panelsContainer = document.querySelector('.settings-panels') as HTMLDivElement | null;
+
+  navItems.forEach((item) => {
+    const link = item as HTMLAnchorElement;
+    const targetId = link.getAttribute('href')?.replace('#', '');
+    link.classList.toggle('is-active', targetId === panelId);
+  });
+
+  panels.forEach((panel) => {
+    panel.classList.toggle('is-active', panel.id === panelId);
+  });
+
+  if (panelsContainer) {
+    panelsContainer.scrollTop = 0;
+  }
+}
+
 export function showSettingsModal(): void {
   const modal = document.getElementById('settings-modal');
   if (modal) {
@@ -106,6 +130,7 @@ export function showSettingsModal(): void {
       if (opacityValue) opacityValue.textContent = state.settings.thumbnailLabelOpacity.toString();
     }
     
+    setActiveSettingsPanel(activeSettingsPanel);
     modal.style.display = 'flex';
   }
 }
@@ -157,6 +182,7 @@ export function saveSettingsFromModal(): void {
   
   saveSettings();
   syncExportSettingsUI();
+  updateUI();
   hideSettingsModal();
 }
 
@@ -170,6 +196,7 @@ export function setupSettingsModalListeners(): void {
   const defaultQualityInput = document.getElementById('setting-default-quality') as HTMLInputElement;
   const defaultScaleInput = document.getElementById('setting-default-scale') as HTMLInputElement;
   const labelOpacityInput = document.getElementById('setting-label-opacity') as HTMLInputElement;
+  const navItems = document.querySelectorAll('.settings-nav-item');
   
   if (btnCloseSettings) {
     btnCloseSettings.addEventListener('click', hideSettingsModal);
@@ -201,4 +228,14 @@ export function setupSettingsModalListeners(): void {
       }
     });
   }
+
+  navItems.forEach((item) => {
+    item.addEventListener('click', (event) => {
+      event.preventDefault();
+      const link = item as HTMLAnchorElement;
+      const targetId = link.getAttribute('href')?.replace('#', '') || DEFAULT_SETTINGS_PANEL;
+      activeSettingsPanel = targetId;
+      setActiveSettingsPanel(targetId);
+    });
+  });
 }

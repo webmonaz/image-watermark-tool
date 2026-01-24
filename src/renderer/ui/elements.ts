@@ -77,6 +77,7 @@ export const elements = {
   aboutModal: document.getElementById('about-modal') as HTMLDivElement,
   btnCloseAbout: document.getElementById('btn-close-about') as HTMLButtonElement,
   btnAboutClose: document.getElementById('btn-about-close') as HTMLButtonElement,
+  aboutLink: document.getElementById('about-link') as HTMLAnchorElement,
   
   // Confirmation modal
   confirmModal: document.getElementById('confirm-modal') as HTMLDivElement,

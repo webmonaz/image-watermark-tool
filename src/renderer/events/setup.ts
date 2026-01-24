@@ -317,7 +317,7 @@ export function setupProjectButtonListeners(): void {
   const btnSave = document.getElementById('btn-save-project');
   const btnOpen = document.getElementById('btn-open-project');
   const btnSettings = document.getElementById('btn-settings');
-  const { btnAbout, aboutModal, btnCloseAbout, btnAboutClose } = elements;
+  const { btnAbout, aboutModal, btnCloseAbout, btnAboutClose, aboutLink } = elements;
   
   if (btnSave) {
     btnSave.addEventListener('click', () => saveProject(false));
@@ -341,6 +341,15 @@ export function setupProjectButtonListeners(): void {
   if (aboutModal && btnAboutClose) {
     btnAboutClose.addEventListener('click', () => {
       aboutModal.style.display = 'none';
+    });
+  }
+  if (aboutLink) {
+    aboutLink.addEventListener('click', (event) => {
+      event.preventDefault();
+      const href = aboutLink.href;
+      if (href) {
+        window.electronAPI.openExternal(href);
+      }
     });
   }
 }

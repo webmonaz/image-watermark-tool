@@ -361,6 +361,7 @@ export interface ElectronAPI {
   
   // App info
   getAppVersion: () => Promise<string>;
+  openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
   
   // Theme
   setNativeTheme: (theme: ThemeMode) => void;

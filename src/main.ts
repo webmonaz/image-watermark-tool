@@ -3,7 +3,7 @@
 // Handles window creation, IPC handlers, and file system operations
 // ============================================================================
 
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
@@ -41,9 +41,13 @@ const DEFAULT_SETTINGS: AppSettings = {
  * Create the main application window
  */
 const createWindow = (): void => {
+  const { workArea } = screen.getPrimaryDisplay();
+  const targetWidth = Math.max(1000, Math.min(Math.round(workArea.width * 0.85), 1600));
+  const targetHeight = Math.max(700, Math.min(Math.round(workArea.height * 0.85), 1000));
+
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width: targetWidth,
+    height: targetHeight,
     minWidth: 1000,
     minHeight: 700,
     webPreferences: {
@@ -424,6 +428,26 @@ ipcMain.handle('file:readExif', async (_event: Electron.IpcMainInvokeEvent, file
  */
 ipcMain.handle('app:getVersion', () => {
   return app.getVersion();
+});
+
+/**
+ * Open external link in default browser
+ */
+ipcMain.handle('app:openExternal', async (_event: Electron.IpcMainInvokeEvent, url: string) => {
+  try {
+    const parsedUrl = new URL(url);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return { success: false, error: 'Unsupported URL protocol.' };
+    }
+    await shell.openExternal(parsedUrl.toString());
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening external link:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
 });
 
 // ============================================================================

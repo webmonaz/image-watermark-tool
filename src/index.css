@@ -1122,9 +1122,13 @@ input[type="color"] {
    ============================================================================ */
 
 .settings-modal {
-  min-width: 480px;
-  max-width: 560px;
+  min-width: 640px;
+  width: min(980px, 94vw);
+  max-height: 85vh;
   text-align: left;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .settings-modal .modal-header,
@@ -1162,19 +1166,78 @@ input[type="color"] {
   color: var(--color-text);
 }
 
-.settings-content {
-  margin-bottom: var(--spacing-lg);
+.settings-layout {
+  display: flex;
+  gap: var(--spacing-lg);
+  flex: 1;
+  min-height: 0;
 }
 
-.settings-section {
-  margin-bottom: var(--spacing-lg);
+.settings-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  padding-right: var(--spacing-md);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-height: 0;
 }
 
-.settings-section:last-child {
+.settings-sidebar-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  margin-bottom: var(--spacing-sm);
+}
+
+.settings-nav-item {
+  display: block;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.settings-nav-item:hover,
+.settings-nav-item:focus {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+.settings-nav-item.is-active {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--color-primary);
+}
+
+.settings-panels {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: var(--spacing-sm);
+  padding-bottom: var(--spacing-md);
+  scrollbar-gutter: stable;
+  scroll-behavior: smooth;
+}
+
+.settings-panel {
+  display: none;
+  margin-bottom: var(--spacing-lg);
+  min-height: 0;
+}
+
+.settings-panel.is-active {
+  display: block;
+}
+
+.settings-panel:last-child {
   margin-bottom: 0;
 }
 
-.settings-section h4 {
+.settings-panel h4 {
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text);

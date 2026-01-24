@@ -156,6 +156,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.invoke('app:getVersion');
   },
 
+  /**
+   * Open external URL in default browser
+   */
+  openExternal: (url: string): Promise<{ success: boolean; error?: string }> => {
+    return ipcRenderer.invoke('app:openExternal', url);
+  },
+
   // ========================================
   // Theme
   // ========================================

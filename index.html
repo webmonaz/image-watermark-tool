@@ -362,7 +362,7 @@
           <div class="about-content">
             <p class="about-brand">Webmona</p>
             <p class="about-text">Created by Webmona to help you watermark images faster.</p>
-            <a class="about-link" href="https://webmona.com" target="_blank" rel="noreferrer">webmona.com</a>
+            <a id="about-link" class="about-link" href="https://webmona.com" target="_blank" rel="noreferrer">webmona.com</a>
           </div>
           <div class="modal-actions">
             <button id="btn-about-close" class="btn btn-primary">Close</button>
@@ -377,82 +377,92 @@
             <h3>Settings</h3>
             <button id="btn-close-settings" class="btn-icon btn-close" title="Close">×</button>
           </div>
-          <div class="settings-content">
-            <!-- Appearance -->
-            <div class="settings-section">
-              <h4>Appearance</h4>
-              <div class="control-group">
-                <label for="setting-theme">Theme</label>
-                <select id="setting-theme">
-                  <option value="auto">Auto (System)</option>
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                </select>
-              </div>
-              <div class="control-group">
-                <label class="checkbox-label">
-                  <input type="checkbox" id="setting-show-labels" checked />
-                  <span>Show thumbnail status labels</span>
-                </label>
-                <div class="help-text">Display labels like "New", "Watermarked", "Cropped" on thumbnails</div>
-              </div>
-              <div class="control-group" id="label-opacity-control">
-                <label for="setting-label-opacity">Label Opacity: <span id="setting-label-opacity-value">80</span>%</label>
-                <input type="range" id="setting-label-opacity" min="20" max="100" value="80" />
-              </div>
-            </div>
-            
-            <!-- Performance -->
-            <div class="settings-section">
-              <h4>Performance</h4>
-              <div class="control-group">
-                <label for="setting-preview-quality">Preview Quality</label>
-                <div class="help-text">Higher quality uses more memory but looks better</div>
-                <select id="setting-preview-quality">
-                  <option value="performance">Performance (800px)</option>
-                  <option value="balanced">Balanced (1200px) - Recommended</option>
-                  <option value="quality">Quality (2400px)</option>
-                  <option value="full">Full Resolution</option>
-                </select>
-              </div>
-            </div>
+          <div class="settings-layout">
+            <nav class="settings-sidebar">
+              <div class="settings-sidebar-title">Preferences</div>
+              <a class="settings-nav-item is-active" href="#settings-appearance">Appearance</a>
+              <a class="settings-nav-item" href="#settings-thumbnails">Thumbnails</a>
+              <a class="settings-nav-item" href="#settings-performance">Performance</a>
+              <a class="settings-nav-item" href="#settings-watermark">Watermark Defaults</a>
+              <a class="settings-nav-item" href="#settings-export">Export Defaults</a>
+            </nav>
+            <div class="settings-panels">
+              <section id="settings-appearance" class="settings-panel is-active">
+                <h4>Appearance</h4>
+                <div class="control-group">
+                  <label for="setting-theme">Theme</label>
+                  <select id="setting-theme">
+                    <option value="auto">Auto (System)</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </div>
+              </section>
 
-            <!-- Watermark Defaults -->
-            <div class="settings-section">
-              <h4>Watermark Defaults</h4>
-              <div class="control-group">
-                <label for="setting-default-position">Default Position</label>
-                <select id="setting-default-position">
-                  <option value="bottom-right">Bottom Right (Recommended)</option>
-                  <option value="bottom-left">Bottom Left</option>
-                  <option value="top-right">Top Right</option>
-                  <option value="top-left">Top Left</option>
-                  <option value="center">Center</option>
-                  <option value="custom">Custom (Drag to position)</option>
-                </select>
-              </div>
-            </div>
-            
-            <!-- Default Export Settings -->
-            <div class="settings-section">
-              <h4>Default Export Settings</h4>
-              <div class="control-group">
-                <label for="setting-default-format">Default Format</label>
-                <select id="setting-default-format">
-                  <option value="png">PNG (Lossless)</option>
-                  <option value="jpg">JPG (Smaller)</option>
-                  <option value="webp">WebP (Modern)</option>
-                </select>
-              </div>
-              <div class="control-group">
-                <label for="setting-default-quality">Default Quality: <span id="setting-default-quality-value">85</span>%</label>
-                <input type="range" id="setting-default-quality" min="1" max="100" value="85" />
-              </div>
-              <div class="control-group">
-                <label for="setting-default-scale">Default Resolution: <span id="setting-default-scale-value">100</span>%</label>
-                <div class="help-text">Scale export size up or down for all presets</div>
-                <input type="range" id="setting-default-scale" min="25" max="200" value="100" />
-              </div>
+              <section id="settings-thumbnails" class="settings-panel">
+                <h4>Thumbnails</h4>
+                <div class="control-group">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="setting-show-labels" checked />
+                    <span>Show thumbnail status labels</span>
+                  </label>
+                  <div class="help-text">Display labels like "New", "Watermarked", "Cropped" on thumbnails</div>
+                </div>
+                <div class="control-group" id="label-opacity-control">
+                  <label for="setting-label-opacity">Label Opacity: <span id="setting-label-opacity-value">80</span>%</label>
+                  <input type="range" id="setting-label-opacity" min="20" max="100" value="80" />
+                </div>
+              </section>
+
+              <section id="settings-performance" class="settings-panel">
+                <h4>Performance</h4>
+                <div class="control-group">
+                  <label for="setting-preview-quality">Preview Quality</label>
+                  <div class="help-text">Higher quality uses more memory but looks better</div>
+                  <select id="setting-preview-quality">
+                    <option value="performance">Performance (800px)</option>
+                    <option value="balanced">Balanced (1200px) - Recommended</option>
+                    <option value="quality">Quality (2400px)</option>
+                    <option value="full">Full Resolution</option>
+                  </select>
+                </div>
+              </section>
+
+              <section id="settings-watermark" class="settings-panel">
+                <h4>Watermark Defaults</h4>
+                <div class="control-group">
+                  <label for="setting-default-position">Default Position</label>
+                  <select id="setting-default-position">
+                    <option value="bottom-right">Bottom Right (Recommended)</option>
+                    <option value="bottom-left">Bottom Left</option>
+                    <option value="top-right">Top Right</option>
+                    <option value="top-left">Top Left</option>
+                    <option value="center">Center</option>
+                    <option value="custom">Custom (Drag to position)</option>
+                  </select>
+                </div>
+              </section>
+
+              <section id="settings-export" class="settings-panel">
+                <h4>Export Defaults</h4>
+                <div class="control-group">
+                  <label for="setting-default-format">Default Format</label>
+                  <select id="setting-default-format">
+                    <option value="png">PNG (Lossless)</option>
+                    <option value="jpg">JPG (Smaller)</option>
+                    <option value="webp">WebP (Modern)</option>
+                  </select>
+                </div>
+                <div class="control-group">
+                  <label for="setting-default-quality">Default Quality: <span id="setting-default-quality-value">85</span>%</label>
+                  <input type="range" id="setting-default-quality" min="1" max="100" value="85" />
+                </div>
+                <div class="control-group">
+                  <label for="setting-default-scale">Default Resolution: <span id="setting-default-scale-value">100</span>%</label>
+                  <div class="help-text">Scale export size up or down for all presets</div>
+                  <input type="range" id="setting-default-scale" min="25" max="200" value="100" />
+                </div>
+              </section>
             </div>
           </div>
           <div class="modal-actions">
