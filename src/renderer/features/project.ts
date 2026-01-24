@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { state } from '../state';
+import { elements } from '../ui/elements';
 import { 
   generateThumbnail, 
   THUMBNAIL_SIZE, 
@@ -18,11 +19,16 @@ import type { ImageItem, ProjectFile } from '../../types';
 // ============================================================================
 
 export function updateWindowTitle(): void {
-  const baseName = state.currentProjectPath 
-    ? state.currentProjectPath.split('/').pop()?.split('\\').pop() || 'Untitled'
-    : 'Untitled';
+  const defaultName = 'Untitled.iwp';
+  const baseName = state.currentProjectPath
+    ? state.currentProjectPath.split('/').pop()?.split('\\').pop() || defaultName
+    : defaultName;
   const unsavedMarker = state.hasUnsavedChanges ? ' *' : '';
-  document.title = `${baseName}${unsavedMarker} - Image Watermark Tool`;
+  const displayName = `${baseName}${unsavedMarker}`;
+  document.title = `${displayName} - Image Watermark Tool`;
+  if (elements.projectTitle) {
+    elements.projectTitle.textContent = displayName;
+  }
 }
 
 // ============================================================================

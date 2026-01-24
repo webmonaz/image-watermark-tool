@@ -129,9 +129,9 @@ body {
    ============================================================================ */
 
 .app-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   height: var(--header-height);
   padding: 0 var(--spacing-lg);
   padding-left: 80px; /* Space for macOS traffic lights */
@@ -139,6 +139,8 @@ body {
   border-bottom: 1px solid var(--color-border);
   -webkit-app-region: drag; /* Allow dragging window */
   flex-shrink: 0;
+  position: relative;
+  gap: var(--spacing-md);
 }
 
 /* On Windows, less padding needed */
@@ -148,6 +150,10 @@ body {
   }
 }
 
+.header-title {
+  justify-self: start;
+}
+
 .header-title h1 {
   font-size: 18px;
   font-weight: 600;
@@ -155,9 +161,16 @@ body {
 }
 
 .header-title .subtitle {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-text-secondary);
-  margin-top: 1px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-title .subtitle span {
+  font-weight: 600;
 }
 
 .header-actions {
@@ -165,6 +178,7 @@ body {
   align-items: center;
   gap: var(--spacing-sm);
   -webkit-app-region: no-drag;
+  justify-self: end;
 }
 
 .header-divider {

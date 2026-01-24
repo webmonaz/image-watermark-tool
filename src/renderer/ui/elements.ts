@@ -21,6 +21,7 @@ export const elements = {
   previewContainer: document.getElementById('preview-container') as HTMLDivElement,
   previewCanvas: document.getElementById('preview-canvas') as HTMLCanvasElement,
   previewInfo: document.getElementById('preview-info') as HTMLDivElement,
+  projectTitle: document.getElementById('project-title') as HTMLSpanElement,
   noImagePlaceholder: document.getElementById('no-image-placeholder') as HTMLDivElement,
   watermarkOverlay: document.getElementById('watermark-overlay') as HTMLDivElement,
   watermarkHandle: document.getElementById('watermark-handle') as HTMLDivElement,
