@@ -124,3 +124,14 @@ npm run eslint
 - Process images in queue, not all at once
 - Show per-image progress during batch export
 - Lazy-load image thumbnails for large batches
+
+## Claude Code Instructions
+
+### MCP Server Restrictions
+- **DO NOT use Chrome DevTools MCP server** for this project - this is an Electron app, not a browser-based app
+
+### Build Commands
+- **DO NOT use `npx vite build`** - this is an Electron project using Electron Forge
+- Use `npm run make` to create distributable builds
+- Use `npm run package` to package the app for testing
+- Use `npm start` to run in development mode

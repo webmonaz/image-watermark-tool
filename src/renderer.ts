@@ -138,7 +138,9 @@ const elements = {
   noImagePlaceholder: document.getElementById('no-image-placeholder') as HTMLDivElement,
   watermarkOverlay: document.getElementById('watermark-overlay') as HTMLDivElement,
   watermarkHandle: document.getElementById('watermark-handle') as HTMLDivElement,
-  
+  cropOverlay: document.getElementById('crop-overlay') as HTMLDivElement,
+  cropBox: document.getElementById('crop-box') as HTMLDivElement,
+
   // Watermark type
   watermarkTypeRadios: document.querySelectorAll('input[name="watermark-type"]') as NodeListOf<HTMLInputElement>,
   imageWatermarkControls: document.getElementById('image-watermark-controls') as HTMLDivElement,
@@ -209,6 +211,27 @@ let cachedWatermarkImage: HTMLImageElement | null = null;
 // Thumbnail context menu state
 let thumbnailContextMenu: HTMLDivElement | null = null;
 let contextMenuImageId: string | null = null;
+
+// Crop interaction state
+interface CropDragState {
+  isDragging: boolean;
+  isResizing: boolean;
+  activeHandle: string | null;
+  startX: number;
+  startY: number;
+  startCrop: { x: number; y: number; width: number; height: number };
+  aspectRatio: number | null;
+}
+
+const cropDragState: CropDragState = {
+  isDragging: false,
+  isResizing: false,
+  activeHandle: null,
+  startX: 0,
+  startY: 0,
+  startCrop: { x: 0, y: 0, width: 100, height: 100 },
+  aspectRatio: null,
+};
 
 // ============================================================================
 // Utility Functions
@@ -640,27 +663,35 @@ function removeImage(id: string): void {
 
 function updatePreview(): void {
   const image = getSelectedImage();
-  
+
   if (!image) {
     elements.previewCanvas.style.display = 'none';
     elements.noImagePlaceholder.style.display = 'block';
     elements.watermarkOverlay.style.display = 'none';
+    elements.cropOverlay.style.display = 'none';
     elements.previewInfo.textContent = 'Select an image to preview';
     return;
   }
-  
+
   elements.noImagePlaceholder.style.display = 'none';
   elements.previewCanvas.style.display = 'block';
   elements.previewInfo.textContent = `${image.fileName} (${image.width}×${image.height})`;
-  
+
   // Draw preview
   drawPreview(image);
-  
+
   // Show watermark handle for custom position
   if (image.watermarkSettings.position === 'custom') {
     elements.watermarkOverlay.style.display = 'block';
   } else {
     elements.watermarkOverlay.style.display = 'none';
+  }
+
+  // Show crop overlay for non-original presets
+  if (image.cropSettings.preset !== 'original') {
+    elements.cropOverlay.style.display = 'block';
+  } else {
+    elements.cropOverlay.style.display = 'none';
   }
 }
 
@@ -705,7 +736,7 @@ function drawPreview(image: ImageItem): void {
   const canvas = elements.previewCanvas;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  
+
   // Use previewData (pre-scaled) for better performance
   const img = new Image();
   img.onload = () => {
@@ -715,7 +746,7 @@ function drawPreview(image: ImageItem): void {
 
     // Draw full image
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
-    
+
     // Draw watermark preview using image-specific settings
     // Get watermark settings - use global watermark image if image doesn't have one
     const settings = image.watermarkSettings;
@@ -723,23 +754,8 @@ function drawPreview(image: ImageItem): void {
       ...settings,
       imageConfig: settings.imageConfig || state.globalWatermarkSettings.imageConfig,
     };
-    
-    // Mask crop area for non-original presets
-    if (image.cropSettings.preset !== 'original') {
-      ctx.save();
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-      ctx.fillRect(0, 0, displayWidth, displayHeight);
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
-      ctx.restore();
 
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
-      ctx.restore();
-    }
-
+    // Draw watermark clipped to crop area
     ctx.save();
     ctx.beginPath();
     ctx.rect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
@@ -748,6 +764,10 @@ function drawPreview(image: ImageItem): void {
     drawWatermarkPreview(ctx, cropRect.width, cropRect.height, effectiveSettings);
     ctx.restore();
 
+    // Position overlays after drawing
+    if (image.cropSettings.preset !== 'original') {
+      updateCropOverlayPosition();
+    }
     if (image.watermarkSettings.position === 'custom') {
       positionWatermarkHandle();
     }
@@ -920,26 +940,87 @@ function getWatermarkPosition(
   }
 }
 
+function getWatermarkBounds(image: ImageItem): { x: number; y: number; width: number; height: number } | null {
+  const settings = image.watermarkSettings;
+  const effectiveSettings = {
+    ...settings,
+    imageConfig: settings.imageConfig || state.globalWatermarkSettings.imageConfig,
+  };
+
+  const { cropRect } = getPreviewLayout(image);
+
+  if (effectiveSettings.type === 'image' && effectiveSettings.imageConfig?.imageData) {
+    const scaleFactor = effectiveSettings.scale / 100;
+    const watermarkWidth = cropRect.width * scaleFactor;
+    const aspectRatio = effectiveSettings.imageConfig.originalHeight / effectiveSettings.imageConfig.originalWidth;
+    const watermarkHeight = watermarkWidth * aspectRatio;
+
+    const pos = getWatermarkPosition(
+      cropRect.width,
+      cropRect.height,
+      watermarkWidth,
+      watermarkHeight,
+      effectiveSettings
+    );
+
+    return {
+      x: cropRect.x + pos.x,
+      y: cropRect.y + pos.y,
+      width: watermarkWidth,
+      height: watermarkHeight,
+    };
+  } else if (effectiveSettings.type === 'text' && effectiveSettings.textConfig?.text) {
+    // Approximate text dimensions
+    const fontSize = Math.round((effectiveSettings.scale / 100) * cropRect.width * 0.1);
+    const textWidth = Math.max(60, effectiveSettings.textConfig.text.length * fontSize * 0.6);
+    const textHeight = Math.max(30, fontSize * 1.2);
+
+    const pos = getWatermarkPosition(
+      cropRect.width,
+      cropRect.height,
+      textWidth,
+      textHeight,
+      effectiveSettings
+    );
+
+    return {
+      x: cropRect.x + pos.x,
+      y: cropRect.y + pos.y,
+      width: textWidth,
+      height: textHeight,
+    };
+  }
+
+  return null;
+}
+
 function positionWatermarkHandle(): void {
   const canvas = elements.previewCanvas;
   const handle = elements.watermarkHandle;
   const selectedImage = getSelectedImage();
-  
+
   if (!selectedImage) return;
-  
-  const { cropRect } = getPreviewLayout(selectedImage);
-  const x = cropRect.x + (selectedImage.watermarkSettings.customX / 100) * cropRect.width;
-  const y = cropRect.y + (selectedImage.watermarkSettings.customY / 100) * cropRect.height;
-  
+
+  const bounds = getWatermarkBounds(selectedImage);
+  if (!bounds) {
+    handle.style.display = 'none';
+    return;
+  }
+
+  handle.style.display = 'block';
+
   // Account for canvas position within container
   const canvasRect = canvas.getBoundingClientRect();
   const containerRect = elements.previewContainer.getBoundingClientRect();
-  
+
   const offsetX = canvasRect.left - containerRect.left;
   const offsetY = canvasRect.top - containerRect.top;
-  
-  handle.style.left = `${offsetX + x - 30}px`;
-  handle.style.top = `${offsetY + y - 30}px`;
+
+  // Position handle to match watermark bounds
+  handle.style.left = `${offsetX + bounds.x}px`;
+  handle.style.top = `${offsetY + bounds.y}px`;
+  handle.style.width = `${bounds.width}px`;
+  handle.style.height = `${bounds.height}px`;
 }
 
 // ============================================================================
@@ -1427,48 +1508,379 @@ function readFileAsDataUrl(file: File): Promise<string> {
 function setupWatermarkDragging(): void {
   const handle = elements.watermarkHandle;
   let isDragging = false;
-  
-  handle.addEventListener('mousedown', (e) => {
-    isDragging = true;
-    handle.style.cursor = 'grabbing';
-    e.preventDefault();
-  });
-  
-  document.addEventListener('mousemove', (e) => {
-    if (!isDragging) return;
-    
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  handle.addEventListener('mousedown', (e: MouseEvent) => {
     const selectedImage = getSelectedImage();
     if (!selectedImage) return;
-    
+
+    isDragging = true;
+    handle.classList.add('dragging');
+
+    // Calculate offset from click position to watermark top-left
+    const bounds = getWatermarkBounds(selectedImage);
+    if (bounds) {
+      const canvasRect = elements.previewCanvas.getBoundingClientRect();
+      dragOffsetX = e.clientX - canvasRect.left - bounds.x;
+      dragOffsetY = e.clientY - canvasRect.top - bounds.y;
+    }
+
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e: MouseEvent) => {
+    if (!isDragging) return;
+
+    const selectedImage = getSelectedImage();
+    if (!selectedImage) return;
+
     const canvas = elements.previewCanvas;
     const canvasRect = canvas.getBoundingClientRect();
     const { cropRect } = getPreviewLayout(selectedImage);
-    
-    // Calculate new position as percentage
-    const x = ((e.clientX - canvasRect.left - cropRect.x) / cropRect.width) * 100;
-    const y = ((e.clientY - canvasRect.top - cropRect.y) / cropRect.height) * 100;
-    
-    // Clamp to 0-100
-    selectedImage.watermarkSettings.customX = Math.max(0, Math.min(100, x));
-    selectedImage.watermarkSettings.customY = Math.max(0, Math.min(100, y));
-    
+
+    // Calculate new position relative to crop area, accounting for drag offset
+    const mouseX = e.clientX - canvasRect.left - dragOffsetX;
+    const mouseY = e.clientY - canvasRect.top - dragOffsetY;
+
+    // Convert to percentage within crop area
+    const x = ((mouseX - cropRect.x) / cropRect.width) * 100;
+    const y = ((mouseY - cropRect.y) / cropRect.height) * 100;
+
+    // Clamp to valid range (allow some overflow for edge placement)
+    selectedImage.watermarkSettings.customX = Math.max(-10, Math.min(110, x));
+    selectedImage.watermarkSettings.customY = Math.max(-10, Math.min(110, y));
+
     positionWatermarkHandle();
     updatePreview();
   });
-  
+
   document.addEventListener('mouseup', () => {
     if (isDragging) {
       isDragging = false;
-      handle.style.cursor = 'move';
-      
-      // Save to undo stack after drag ends
+      handle.classList.remove('dragging');
+
+      // Mark unsaved changes
       const selectedImage = getSelectedImage();
       if (selectedImage) {
-        // Note: We don't push to undo here to avoid too many entries
-        // The position is saved when user switches images or applies to all
+        markUnsavedChanges();
       }
     }
   });
+}
+
+// ============================================================================
+// Crop Interaction
+// ============================================================================
+
+function getPresetAspectRatio(preset: CropPreset): number | null {
+  const RATIOS: Record<string, number> = {
+    'facebook-thumb': 1200 / 630,
+    'facebook-post': 1,
+    'youtube-thumb': 1280 / 720,
+    'tiktok-thumb': 1080 / 1920,
+    '1:1': 1,
+    '4:5': 4 / 5,
+    '16:9': 16 / 9,
+    '9:16': 9 / 16,
+  };
+  return RATIOS[preset] ?? null;
+}
+
+function calculateCenteredCrop(imgRatio: number, targetRatio: number): { x: number; y: number; width: number; height: number } {
+  let cropWidth: number;
+  let cropHeight: number;
+
+  if (imgRatio > targetRatio) {
+    // Image is wider - crop width
+    cropHeight = 100;
+    cropWidth = (targetRatio / imgRatio) * 100;
+  } else {
+    // Image is taller - crop height
+    cropWidth = 100;
+    cropHeight = (imgRatio / targetRatio) * 100;
+  }
+
+  return {
+    x: (100 - cropWidth) / 2,
+    y: (100 - cropHeight) / 2,
+    width: cropWidth,
+    height: cropHeight,
+  };
+}
+
+function updateCropOverlayPosition(): void {
+  const selectedImage = getSelectedImage();
+  const cropBox = elements.cropBox;
+  const cropOverlay = elements.cropOverlay;
+
+  if (!selectedImage || !cropBox || !cropOverlay) return;
+
+  // Only show for non-original presets
+  if (selectedImage.cropSettings.preset === 'original') {
+    cropOverlay.style.display = 'none';
+    return;
+  }
+
+  cropOverlay.style.display = 'block';
+
+  const canvas = elements.previewCanvas;
+  const canvasRect = canvas.getBoundingClientRect();
+  const containerRect = elements.previewContainer.getBoundingClientRect();
+
+  const offsetX = canvasRect.left - containerRect.left;
+  const offsetY = canvasRect.top - containerRect.top;
+
+  // Get the crop rectangle in canvas coordinates
+  const { cropRect } = getPreviewLayout(selectedImage);
+
+  cropBox.style.left = `${offsetX + cropRect.x}px`;
+  cropBox.style.top = `${offsetY + cropRect.y}px`;
+  cropBox.style.width = `${cropRect.width}px`;
+  cropBox.style.height = `${cropRect.height}px`;
+
+  // Add/remove ratio constraint class
+  if (selectedImage.cropSettings.preset !== 'freeform') {
+    cropBox.classList.add('ratio-constrained');
+  } else {
+    cropBox.classList.remove('ratio-constrained');
+  }
+}
+
+function setupCropInteraction(): void {
+  const cropBox = elements.cropBox;
+  const cropOverlay = elements.cropOverlay;
+
+  if (!cropBox || !cropOverlay) return;
+
+  // Get all resize handles
+  const resizeHandles = cropBox.querySelectorAll('.crop-resize-handle');
+
+  // Move handler - drag the crop box itself
+  cropBox.addEventListener('mousedown', (e: MouseEvent) => {
+    // Check if click is on a resize handle
+    if ((e.target as HTMLElement).classList.contains('crop-resize-handle')) {
+      return;
+    }
+    e.stopPropagation();
+    e.preventDefault();
+    startCropMove(e);
+  });
+
+  // Resize handlers
+  resizeHandles.forEach((handle) => {
+    handle.addEventListener('mousedown', (e: MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const handleType = (handle as HTMLElement).dataset.handle;
+      if (handleType) {
+        startCropResize(e as MouseEvent, handleType);
+      }
+    });
+  });
+
+  // Global mouse events for crop
+  document.addEventListener('mousemove', handleCropMouseMove);
+  document.addEventListener('mouseup', handleCropMouseUp);
+}
+
+function startCropMove(e: MouseEvent): void {
+  const selectedImage = getSelectedImage();
+  if (!selectedImage || selectedImage.cropSettings.preset === 'original') return;
+
+  cropDragState.isDragging = true;
+  cropDragState.isResizing = false;
+  cropDragState.activeHandle = 'move';
+  cropDragState.startX = e.clientX;
+  cropDragState.startY = e.clientY;
+  cropDragState.startCrop = {
+    x: selectedImage.cropSettings.x,
+    y: selectedImage.cropSettings.y,
+    width: selectedImage.cropSettings.width,
+    height: selectedImage.cropSettings.height,
+  };
+
+  document.body.style.cursor = 'move';
+}
+
+function startCropResize(e: MouseEvent, handleType: string): void {
+  const selectedImage = getSelectedImage();
+  if (!selectedImage || selectedImage.cropSettings.preset === 'original') return;
+
+  cropDragState.isDragging = false;
+  cropDragState.isResizing = true;
+  cropDragState.activeHandle = handleType;
+  cropDragState.startX = e.clientX;
+  cropDragState.startY = e.clientY;
+  cropDragState.startCrop = {
+    x: selectedImage.cropSettings.x,
+    y: selectedImage.cropSettings.y,
+    width: selectedImage.cropSettings.width,
+    height: selectedImage.cropSettings.height,
+  };
+
+  // Set aspect ratio for constrained presets
+  if (selectedImage.cropSettings.preset !== 'freeform') {
+    cropDragState.aspectRatio = getPresetAspectRatio(selectedImage.cropSettings.preset);
+  } else {
+    cropDragState.aspectRatio = null;
+  }
+
+  // Set cursor based on handle
+  const cursors: Record<string, string> = {
+    'nw': 'nwse-resize',
+    'ne': 'nesw-resize',
+    'se': 'nwse-resize',
+    'sw': 'nesw-resize',
+    'n': 'ns-resize',
+    's': 'ns-resize',
+    'e': 'ew-resize',
+    'w': 'ew-resize',
+  };
+  document.body.style.cursor = cursors[handleType] || 'default';
+}
+
+function handleCropMouseMove(e: MouseEvent): void {
+  if (!cropDragState.isDragging && !cropDragState.isResizing) return;
+
+  const selectedImage = getSelectedImage();
+  if (!selectedImage) return;
+
+  const { displayWidth, displayHeight } = getPreviewLayout(selectedImage);
+
+  // Convert mouse movement to percentage of image
+  const deltaXPercent = ((e.clientX - cropDragState.startX) / displayWidth) * 100;
+  const deltaYPercent = ((e.clientY - cropDragState.startY) / displayHeight) * 100;
+
+  if (cropDragState.activeHandle === 'move') {
+    // Move the crop area
+    let newX = cropDragState.startCrop.x + deltaXPercent;
+    let newY = cropDragState.startCrop.y + deltaYPercent;
+
+    // Constrain to bounds
+    newX = Math.max(0, Math.min(100 - cropDragState.startCrop.width, newX));
+    newY = Math.max(0, Math.min(100 - cropDragState.startCrop.height, newY));
+
+    selectedImage.cropSettings.x = newX;
+    selectedImage.cropSettings.y = newY;
+  } else if (cropDragState.isResizing) {
+    handleCropResize(selectedImage, deltaXPercent, deltaYPercent);
+  }
+
+  updateCropOverlayPosition();
+  updatePreview();
+}
+
+function handleCropResize(
+  image: ImageItem,
+  deltaXPercent: number,
+  deltaYPercent: number
+): void {
+  const handle = cropDragState.activeHandle;
+  const start = cropDragState.startCrop;
+  const ratio = cropDragState.aspectRatio;
+  const imgRatio = image.width / image.height;
+
+  let newX = start.x;
+  let newY = start.y;
+  let newWidth = start.width;
+  let newHeight = start.height;
+
+  // Determine which edges are affected by this handle
+  const affectsLeft = handle?.includes('w');
+  const affectsRight = handle?.includes('e');
+  const affectsTop = handle?.includes('n');
+  const affectsBottom = handle?.includes('s');
+
+  if (ratio !== null) {
+    // Constrained resize - maintain aspect ratio
+    // Calculate the effective ratio in percentage space
+    const effectiveRatio = ratio / imgRatio;
+
+    if (handle === 'nw' || handle === 'se') {
+      // Diagonal resize along NW-SE axis
+      if (handle === 'se') {
+        newWidth = Math.max(10, start.width + deltaXPercent);
+        newHeight = newWidth / effectiveRatio;
+      } else {
+        // nw
+        const widthDelta = -deltaXPercent;
+        newWidth = Math.max(10, start.width + widthDelta);
+        newHeight = newWidth / effectiveRatio;
+        newX = start.x + start.width - newWidth;
+        newY = start.y + start.height - newHeight;
+      }
+    } else if (handle === 'ne' || handle === 'sw') {
+      // Diagonal resize along NE-SW axis
+      if (handle === 'ne') {
+        newWidth = Math.max(10, start.width + deltaXPercent);
+        newHeight = newWidth / effectiveRatio;
+        newY = start.y + start.height - newHeight;
+      } else {
+        // sw
+        const widthDelta = -deltaXPercent;
+        newWidth = Math.max(10, start.width + widthDelta);
+        newHeight = newWidth / effectiveRatio;
+        newX = start.x + start.width - newWidth;
+      }
+    }
+  } else {
+    // Freeform resize - no constraints
+    if (affectsRight) {
+      newWidth = Math.max(10, start.width + deltaXPercent);
+    }
+    if (affectsLeft) {
+      newWidth = Math.max(10, start.width - deltaXPercent);
+      newX = start.x + deltaXPercent;
+      if (newX < 0) {
+        newWidth += newX;
+        newX = 0;
+      }
+    }
+    if (affectsBottom) {
+      newHeight = Math.max(10, start.height + deltaYPercent);
+    }
+    if (affectsTop) {
+      newHeight = Math.max(10, start.height - deltaYPercent);
+      newY = start.y + deltaYPercent;
+      if (newY < 0) {
+        newHeight += newY;
+        newY = 0;
+      }
+    }
+  }
+
+  // Constrain to bounds
+  newX = Math.max(0, newX);
+  newY = Math.max(0, newY);
+  if (newX + newWidth > 100) {
+    newWidth = 100 - newX;
+    if (ratio !== null) {
+      newHeight = newWidth / (ratio / imgRatio);
+    }
+  }
+  if (newY + newHeight > 100) {
+    newHeight = 100 - newY;
+    if (ratio !== null) {
+      newWidth = newHeight * (ratio / imgRatio);
+    }
+  }
+
+  // Update image crop settings
+  image.cropSettings.x = newX;
+  image.cropSettings.y = newY;
+  image.cropSettings.width = Math.max(10, newWidth);
+  image.cropSettings.height = Math.max(10, newHeight);
+}
+
+function handleCropMouseUp(): void {
+  if (cropDragState.isDragging || cropDragState.isResizing) {
+    cropDragState.isDragging = false;
+    cropDragState.isResizing = false;
+    cropDragState.activeHandle = null;
+    document.body.style.cursor = '';
+    markUnsavedChanges();
+  }
 }
 
 // ============================================================================
@@ -1676,7 +2088,35 @@ function setupEventListeners(): void {
     const selectedImage = getSelectedImage();
     if (selectedImage) {
       selectedImage.cropSettings.preset = preset;
+
+      // Initialize crop area for the preset
+      if (preset === 'original') {
+        // Reset to full image
+        selectedImage.cropSettings.x = 0;
+        selectedImage.cropSettings.y = 0;
+        selectedImage.cropSettings.width = 100;
+        selectedImage.cropSettings.height = 100;
+      } else if (preset === 'freeform') {
+        // Keep current crop or default to full image if coming from original
+        if (selectedImage.cropSettings.width === 100 && selectedImage.cropSettings.height === 100) {
+          // Keep as is
+        }
+      } else {
+        // Ratio-based presets - calculate centered crop
+        const aspectRatio = getPresetAspectRatio(preset);
+        if (aspectRatio !== null) {
+          const imgRatio = selectedImage.width / selectedImage.height;
+          const centeredCrop = calculateCenteredCrop(imgRatio, aspectRatio);
+          selectedImage.cropSettings.x = centeredCrop.x;
+          selectedImage.cropSettings.y = centeredCrop.y;
+          selectedImage.cropSettings.width = centeredCrop.width;
+          selectedImage.cropSettings.height = centeredCrop.height;
+        }
+      }
+
+      updateCropOverlayPosition();
       updatePreview();
+      markUnsavedChanges();
     }
   });
   
@@ -1711,11 +2151,16 @@ function setupEventListeners(): void {
     state.cancelExport = true;
   });
   
-  // Window resize - reposition watermark handle
+  // Window resize - reposition watermark handle and crop overlay
   window.addEventListener('resize', () => {
     const selectedImage = getSelectedImage();
-    if (selectedImage?.watermarkSettings.position === 'custom') {
-      positionWatermarkHandle();
+    if (selectedImage) {
+      if (selectedImage.watermarkSettings.position === 'custom') {
+        positionWatermarkHandle();
+      }
+      if (selectedImage.cropSettings.preset !== 'original') {
+        updateCropOverlayPosition();
+      }
     }
   });
   
@@ -2273,6 +2718,7 @@ async function init(): Promise<void> {
   setupDragAndDrop();
   setupThumbnailContextMenu();
   setupWatermarkDragging();
+  setupCropInteraction();
   setupKeyboardShortcuts();
   setupSettingsModalListeners();
   setupProjectButtonListeners();
