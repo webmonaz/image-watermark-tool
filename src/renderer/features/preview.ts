@@ -4,12 +4,18 @@
 
 import { state, getSelectedImage } from '../state';
 import { elements } from '../ui/elements';
+import { 
+  calculateCropArea, 
+  calculateWatermarkPosition as getWatermarkPosition,
+  CROP_PRESETS,
+} from '../../shared/imageProcessing';
 import type { 
   ImageItem, 
   WatermarkSettings, 
-  CropSettings, 
-  CropPreset 
 } from '../../types';
+
+// Re-export shared functions for backward compatibility
+export { CROP_PRESETS, calculateCropArea, getWatermarkPosition };
 
 // ============================================================================
 // Watermark Image Cache
@@ -20,23 +26,6 @@ export let cachedWatermarkImage: HTMLImageElement | null = null;
 export function setCachedWatermarkImage(img: HTMLImageElement | null): void {
   cachedWatermarkImage = img;
 }
-
-// ============================================================================
-// Crop Presets
-// ============================================================================
-
-export const CROP_PRESETS: Record<CropPreset, { width?: number; height?: number; ratio?: number }> = {
-  'original': {},
-  'freeform': {},
-  'facebook-thumb': { width: 1200, height: 630 },
-  'facebook-post': { width: 1200, height: 1200 },
-  'youtube-thumb': { width: 1280, height: 720 },
-  'tiktok-thumb': { width: 1080, height: 1920 },
-  '1:1': { ratio: 1 },
-  '4:5': { ratio: 4 / 5 },
-  '16:9': { ratio: 16 / 9 },
-  '9:16': { ratio: 9 / 16 },
-};
 
 // ============================================================================
 // UI State Updates
@@ -147,99 +136,6 @@ export function getPreviewLayout(image: ImageItem): {
       height: cropArea.height * scale,
     },
   };
-}
-
-// ============================================================================
-// Crop Area Calculation
-// ============================================================================
-
-export function calculateCropArea(
-  imgWidth: number,
-  imgHeight: number,
-  cropSettings: CropSettings
-): { x: number; y: number; width: number; height: number } {
-  if (cropSettings.preset === 'original') {
-    return { x: 0, y: 0, width: imgWidth, height: imgHeight };
-  }
-
-  // For freeform and ratio-based presets, use the stored percentage values
-  const hasUserModifications = cropSettings.width !== 100 || cropSettings.height !== 100 ||
-                                cropSettings.x !== 0 || cropSettings.y !== 0;
-
-  if (cropSettings.preset === 'freeform' || hasUserModifications) {
-    return {
-      x: (cropSettings.x / 100) * imgWidth,
-      y: (cropSettings.y / 100) * imgHeight,
-      width: (cropSettings.width / 100) * imgWidth,
-      height: (cropSettings.height / 100) * imgHeight,
-    };
-  }
-
-  // For ratio-based presets with no user modifications, calculate centered crop
-  const preset = CROP_PRESETS[cropSettings.preset];
-  let targetRatio: number;
-
-  if (preset.width && preset.height) {
-    targetRatio = preset.width / preset.height;
-  } else if (preset.ratio) {
-    targetRatio = preset.ratio;
-  } else {
-    return { x: 0, y: 0, width: imgWidth, height: imgHeight };
-  }
-
-  const imgRatio = imgWidth / imgHeight;
-  let cropWidth: number;
-  let cropHeight: number;
-
-  if (imgRatio > targetRatio) {
-    cropHeight = imgHeight;
-    cropWidth = imgHeight * targetRatio;
-  } else {
-    cropWidth = imgWidth;
-    cropHeight = imgWidth / targetRatio;
-  }
-
-  const x = (imgWidth - cropWidth) / 2;
-  const y = (imgHeight - cropHeight) / 2;
-
-  return { x, y, width: cropWidth, height: cropHeight };
-}
-
-// ============================================================================
-// Watermark Position Calculation
-// ============================================================================
-
-export function getWatermarkPosition(
-  canvasWidth: number,
-  canvasHeight: number,
-  watermarkWidth: number,
-  watermarkHeight: number,
-  settings: WatermarkSettings
-): { x: number; y: number } {
-  const padding = 20;
-  
-  switch (settings.position) {
-    case 'top-left':
-      return { x: padding, y: padding };
-    case 'top-right':
-      return { x: canvasWidth - watermarkWidth - padding, y: padding };
-    case 'bottom-left':
-      return { x: padding, y: canvasHeight - watermarkHeight - padding };
-    case 'bottom-right':
-      return { x: canvasWidth - watermarkWidth - padding, y: canvasHeight - watermarkHeight - padding };
-    case 'center':
-      return {
-        x: (canvasWidth - watermarkWidth) / 2,
-        y: (canvasHeight - watermarkHeight) / 2,
-      };
-    case 'custom':
-      return {
-        x: (settings.customX / 100) * canvasWidth,
-        y: (settings.customY / 100) * canvasHeight,
-      };
-    default:
-      return { x: padding, y: padding };
-  }
 }
 
 // ============================================================================
