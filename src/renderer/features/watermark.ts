@@ -270,8 +270,24 @@ export function setupWatermarkDragging(): void {
       const x = ((mouseX - cropRect.x) / cropRect.width) * 100;
       const y = ((mouseY - cropRect.y) / cropRect.height) * 100;
 
-      selectedImage.watermarkSettings.customX = Math.max(-10, Math.min(110, x));
-      selectedImage.watermarkSettings.customY = Math.max(-10, Math.min(110, y));
+      const clampedX = Math.max(-10, Math.min(110, x));
+      const clampedY = Math.max(-10, Math.min(110, y));
+
+      // Check if using layer system
+      const layerStack = selectedImage.watermarkSettings.layerStack;
+      if (layerStack && layerStack.selectedLayerId) {
+        const layer = layerStack.layers.find(l => l.id === layerStack.selectedLayerId);
+        if (layer) {
+          layer.position = 'custom';
+          layer.customX = clampedX;
+          layer.customY = clampedY;
+        }
+      } else {
+        // Legacy single-watermark system
+        selectedImage.watermarkSettings.position = 'custom';
+        selectedImage.watermarkSettings.customX = clampedX;
+        selectedImage.watermarkSettings.customY = clampedY;
+      }
 
       positionWatermarkHandle();
       updatePreview();
@@ -282,14 +298,29 @@ export function setupWatermarkDragging(): void {
       const delta = Math.max(deltaX, deltaY);
 
       const scaleChange = (delta / watermarkDragState.startWidth) * watermarkDragState.startScale;
-      const newScale = watermarkDragState.startScale + scaleChange;
+      const newScale = Math.max(5, Math.min(50, watermarkDragState.startScale + scaleChange));
 
-      selectedImage.watermarkSettings.scale = Math.max(5, Math.min(50, newScale));
-
-      elements.watermarkScale.value = selectedImage.watermarkSettings.scale.toString();
-      elements.watermarkScaleValue.textContent = Math.round(selectedImage.watermarkSettings.scale).toString();
-
-      state.globalWatermarkSettings.scale = selectedImage.watermarkSettings.scale;
+      // Check if using layer system
+      const layerStack = selectedImage.watermarkSettings.layerStack;
+      if (layerStack && layerStack.selectedLayerId) {
+        const layer = layerStack.layers.find(l => l.id === layerStack.selectedLayerId);
+        if (layer) {
+          layer.scale = newScale;
+          // Update layer UI controls if they exist
+          if (elements.layerScale) {
+            elements.layerScale.value = newScale.toString();
+          }
+          if (elements.layerScaleValue) {
+            elements.layerScaleValue.textContent = Math.round(newScale).toString();
+          }
+        }
+      } else {
+        // Legacy single-watermark system
+        selectedImage.watermarkSettings.scale = newScale;
+        elements.watermarkScale.value = newScale.toString();
+        elements.watermarkScaleValue.textContent = Math.round(newScale).toString();
+        state.globalWatermarkSettings.scale = newScale;
+      }
 
       positionWatermarkHandle();
       updatePreview();
@@ -298,12 +329,25 @@ export function setupWatermarkDragging(): void {
 
   document.addEventListener('mouseup', () => {
     if (watermarkDragState.isDragging || watermarkDragState.isResizing) {
+      const wasDragging = watermarkDragState.isDragging;
+
       watermarkDragState.isDragging = false;
       watermarkDragState.isResizing = false;
       elements.watermarkHandle.classList.remove('dragging');
 
       const selectedImage = getSelectedImage();
       if (selectedImage) {
+        // Sync UI for layer system
+        const layerStack = selectedImage.watermarkSettings.layerStack;
+        if (layerStack && layerStack.selectedLayerId) {
+          const layer = layerStack.layers.find(l => l.id === layerStack.selectedLayerId);
+          if (layer) {
+            // Update layer position UI when position was changed by dragging
+            if (wasDragging && elements.layerPosition) {
+              elements.layerPosition.value = layer.position;
+            }
+          }
+        }
         markUnsavedChanges();
       }
     }

@@ -478,8 +478,8 @@ export function updateLayerApplyButtons(): void {
  * Set up all layer-related event listeners
  */
 export function setupLayerEventListeners(): void {
-  // Add layer buttons
-  elements.btnAddImageLayer?.addEventListener('click', () => addLayer('image'));
+  // Add layer buttons - Image layer prompts for image selection first
+  elements.btnAddImageLayer?.addEventListener('click', () => loadImageForNewLayer());
   elements.btnAddTextLayer?.addEventListener('click', () => addLayer('text'));
   elements.btnDeleteLayer?.addEventListener('click', deleteSelectedLayer);
 
@@ -794,6 +794,7 @@ function getDragAfterElement(
 
 /**
  * Load a watermark image for a new image layer
+ * This prompts the user to select an image first, then creates the layer with the image already set
  */
 export async function loadImageForNewLayer(): Promise<void> {
   const result = await window.electronAPI.selectWatermarkImage();
@@ -806,26 +807,78 @@ export async function loadImageForNewLayer(): Promise<void> {
     const imageData = await window.electronAPI.readImageAsBase64(result.filePath);
     const dimensions = await getImageDimensions(imageData);
 
-    // Create the layer first
-    addLayer('image');
+    // Pre-cache the image before creating the layer so it renders immediately
+    await preloadLayerImage(imageData);
 
-    // Then update it with the image data
-    const layer = getSelectedLayerFromImage();
-    if (layer) {
-      updateSelectedLayer(
-        {
-          imageConfig: {
-            imageData,
-            originalWidth: dimensions.width,
-            originalHeight: dimensions.height,
-            opacity: 80,
-          },
-        },
-        false
-      );
-      syncLayerSettingsUI();
-    }
+    // Create the layer with imageConfig already set
+    addImageLayerWithData(imageData, dimensions.width, dimensions.height);
   } catch (error) {
     console.error('Failed to load watermark image:', error);
   }
+}
+
+/**
+ * Add a new image layer with image data already set
+ */
+function addImageLayerWithData(imageData: string, width: number, height: number): void {
+  const image = getSelectedImage();
+  if (!image) return;
+
+  // Initialize layer stack if needed
+  if (!image.watermarkSettings.layerStack) {
+    image.watermarkSettings.layerStack = {
+      layers: [],
+      selectedLayerId: null,
+    };
+  }
+
+  const layerStack = image.watermarkSettings.layerStack;
+
+  // Check layer limit
+  if (layerStack.layers.length >= MAX_LAYERS) {
+    alert(`Maximum of ${MAX_LAYERS} layers allowed per image.`);
+    return;
+  }
+
+  const previousStack = deepCloneLayerStack(layerStack);
+
+  // Create layer with image data already set
+  const newLayer = createDefaultLayer('image');
+  newLayer.imageConfig = {
+    imageData,
+    originalWidth: width,
+    originalHeight: height,
+    opacity: 80,
+  };
+
+  layerStack.layers.push(newLayer);
+  layerStack.selectedLayerId = newLayer.id;
+
+  pushToUndoStack({
+    type: 'single',
+    imageId: image.id,
+    previousLayerStack: previousStack,
+    newLayerStack: deepCloneLayerStack(layerStack),
+  });
+
+  markUnsavedChanges();
+  renderLayerList();
+  syncLayerSettingsUI();
+  updatePreview();
+  updateLayerApplyButtons();
+}
+
+/**
+ * Pre-load and cache a layer image for immediate display
+ */
+function preloadLayerImage(imageData: string): Promise<void> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      // The image will be cached by the preview module when it tries to draw
+      resolve();
+    };
+    img.onerror = () => resolve(); // Resolve anyway on error
+    img.src = imageData;
+  });
 }

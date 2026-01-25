@@ -242,6 +242,9 @@ function setCachedLayerImage(imageData: string, img: HTMLImageElement): void {
 /**
  * Draw a single watermark layer with rotation support
  */
+// Track pending image loads to avoid multiple redraws
+let pendingImageLoad = false;
+
 function drawLayerPreview(
   ctx: CanvasRenderingContext2D,
   layer: WatermarkLayer,
@@ -262,8 +265,14 @@ function drawLayerPreview(
       const watermarkImg = new Image();
       watermarkImg.onload = () => {
         setCachedLayerImage(layer.imageConfig!.imageData, watermarkImg);
-        // Note: We don't redraw here to avoid infinite loops
-        // The image will be drawn correctly on next preview update
+        // Trigger a redraw after image loads (with debounce to avoid multiple redraws)
+        if (!pendingImageLoad) {
+          pendingImageLoad = true;
+          requestAnimationFrame(() => {
+            pendingImageLoad = false;
+            updatePreview();
+          });
+        }
       };
       watermarkImg.src = layer.imageConfig.imageData;
     }
@@ -561,10 +570,17 @@ function drawPreview(image: ImageItem): void {
       updateCropOverlayPositionFn();
     }
 
-    // Check if any layer has custom position or if using legacy custom position
-    const hasCustomPosition = settings.layerStack?.layers.some(l => l.position === 'custom') ||
-                              settings.position === 'custom';
-    if (hasCustomPosition && positionWatermarkHandleFn) {
+    // Position watermark handle for selected layer with content
+    const selectedLayer = settings.layerStack?.layers.find(
+      l => l.id === settings.layerStack?.selectedLayerId
+    );
+    const hasSelectedLayerWithContent = selectedLayer && selectedLayer.visible && (
+      (selectedLayer.type === 'image' && selectedLayer.imageConfig?.imageData) ||
+      (selectedLayer.type === 'text' && selectedLayer.textConfig?.text)
+    );
+    const hasLegacyCustomPosition = settings.position === 'custom';
+
+    if ((hasSelectedLayerWithContent || hasLegacyCustomPosition) && positionWatermarkHandleFn) {
       positionWatermarkHandleFn();
     }
   };
@@ -590,10 +606,18 @@ export function updatePreview(): void {
 
   drawPreview(image);
 
-  // Check if any layer has custom position or if using legacy custom position
-  const hasCustomPosition = image.watermarkSettings.layerStack?.layers.some(l => l.position === 'custom') ||
-                            image.watermarkSettings.position === 'custom';
-  if (hasCustomPosition) {
+  // Show watermark overlay (draggable handle) if:
+  // 1. There's a selected layer with content (image data or text)
+  // 2. OR using legacy custom position
+  const layerStack = image.watermarkSettings.layerStack;
+  const selectedLayer = layerStack?.layers.find(l => l.id === layerStack.selectedLayerId);
+  const hasSelectedLayerWithContent = selectedLayer && selectedLayer.visible && (
+    (selectedLayer.type === 'image' && selectedLayer.imageConfig?.imageData) ||
+    (selectedLayer.type === 'text' && selectedLayer.textConfig?.text)
+  );
+  const hasLegacyCustomPosition = image.watermarkSettings.position === 'custom';
+
+  if (hasSelectedLayerWithContent || hasLegacyCustomPosition) {
     elements.watermarkOverlay.style.display = 'block';
   } else {
     elements.watermarkOverlay.style.display = 'none';
