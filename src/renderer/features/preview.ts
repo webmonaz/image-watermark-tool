@@ -4,16 +4,20 @@
 
 import { state, getSelectedImage } from '../state';
 import { elements } from '../ui/elements';
-import { 
-  calculateCropArea, 
+import {
+  calculateCropArea,
   calculateWatermarkPosition as getWatermarkPosition,
+  calculateLayerPosition,
+  applyRotationTransform,
   CROP_PRESETS,
 } from '../../shared/imageProcessing';
-import type { 
-  ImageItem, 
+import type {
+  ImageItem,
   WatermarkSettings,
+  WatermarkLayer,
   ThumbnailEditStatus,
 } from '../../types';
+import { calculateOutputDimensionsForDisplay } from '../utils';
 
 // Re-export shared functions for backward compatibility
 export { CROP_PRESETS, calculateCropArea, getWatermarkPosition };
@@ -213,10 +217,243 @@ function drawWatermarkPreview(
 }
 
 // ============================================================================
+// Watermark Layer Cache (for multiple image watermarks)
+// ============================================================================
+
+const layerImageCache: Map<string, HTMLImageElement> = new Map();
+
+function getCachedLayerImage(imageData: string): HTMLImageElement | null {
+  return layerImageCache.get(imageData) || null;
+}
+
+function setCachedLayerImage(imageData: string, img: HTMLImageElement): void {
+  // Limit cache size to prevent memory issues
+  if (layerImageCache.size > 20) {
+    const firstKey = layerImageCache.keys().next().value;
+    if (firstKey) layerImageCache.delete(firstKey);
+  }
+  layerImageCache.set(imageData, img);
+}
+
+// ============================================================================
+// Layer Drawing Functions
+// ============================================================================
+
+/**
+ * Draw a single watermark layer with rotation support
+ */
+function drawLayerPreview(
+  ctx: CanvasRenderingContext2D,
+  layer: WatermarkLayer,
+  canvasWidth: number,
+  canvasHeight: number
+): void {
+  if (!layer.visible) return;
+
+  ctx.save();
+
+  if (layer.type === 'image' && layer.imageConfig?.imageData) {
+    const cachedImg = getCachedLayerImage(layer.imageConfig.imageData);
+
+    if (cachedImg) {
+      drawImageLayer(ctx, cachedImg, layer, canvasWidth, canvasHeight);
+    } else {
+      // Load image asynchronously and cache it
+      const watermarkImg = new Image();
+      watermarkImg.onload = () => {
+        setCachedLayerImage(layer.imageConfig!.imageData, watermarkImg);
+        // Note: We don't redraw here to avoid infinite loops
+        // The image will be drawn correctly on next preview update
+      };
+      watermarkImg.src = layer.imageConfig.imageData;
+    }
+  } else if (layer.type === 'text' && layer.textConfig?.text) {
+    drawTextLayer(ctx, layer, canvasWidth, canvasHeight);
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Draw an image watermark layer
+ */
+function drawImageLayer(
+  ctx: CanvasRenderingContext2D,
+  watermarkImg: HTMLImageElement,
+  layer: WatermarkLayer,
+  canvasWidth: number,
+  canvasHeight: number
+): void {
+  const scaleFactor = layer.scale / 100;
+  const watermarkWidth = canvasWidth * scaleFactor;
+  const aspectRatio = watermarkImg.height / watermarkImg.width;
+  const watermarkHeight = watermarkWidth * aspectRatio;
+
+  const { x, y } = calculateLayerPosition(
+    canvasWidth,
+    canvasHeight,
+    watermarkWidth,
+    watermarkHeight,
+    layer
+  );
+
+  ctx.save();
+
+  // Apply rotation if needed
+  if (layer.rotation !== 0) {
+    applyRotationTransform(ctx, x, y, watermarkWidth, watermarkHeight, layer.rotation);
+  }
+
+  ctx.globalAlpha = (layer.imageConfig?.opacity || 80) / 100;
+  ctx.drawImage(watermarkImg, x, y, watermarkWidth, watermarkHeight);
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+/**
+ * Draw a text watermark layer
+ */
+function drawTextLayer(
+  ctx: CanvasRenderingContext2D,
+  layer: WatermarkLayer,
+  canvasWidth: number,
+  canvasHeight: number
+): void {
+  const config = layer.textConfig!;
+  const fontStyle = config.italic ? 'italic' : 'normal';
+  const fontWeight = config.bold ? 'bold' : 'normal';
+  const fontSize = Math.round((layer.scale / 100) * canvasWidth * 0.1);
+
+  ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px "${config.fontFamily}"`;
+  ctx.fillStyle = config.fontColor;
+
+  const metrics = ctx.measureText(config.text);
+  const textWidth = metrics.width;
+  const textHeight = fontSize;
+
+  const { x, y } = calculateLayerPosition(
+    canvasWidth,
+    canvasHeight,
+    textWidth,
+    textHeight,
+    layer
+  );
+
+  ctx.save();
+
+  // Apply rotation if needed
+  if (layer.rotation !== 0) {
+    applyRotationTransform(ctx, x, y, textWidth, textHeight, layer.rotation);
+  }
+
+  ctx.globalAlpha = config.opacity / 100;
+  ctx.fillText(config.text, x, y + textHeight * 0.8);
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+/**
+ * Draw all watermark layers for an image
+ * Layers are drawn in array order (index 0 = bottom)
+ */
+function drawAllLayersPreview(
+  ctx: CanvasRenderingContext2D,
+  layers: WatermarkLayer[],
+  canvasWidth: number,
+  canvasHeight: number
+): void {
+  for (const layer of layers) {
+    drawLayerPreview(ctx, layer, canvasWidth, canvasHeight);
+  }
+}
+
+// ============================================================================
 // Watermark Bounds (for handle positioning)
 // ============================================================================
 
+/**
+ * Get bounds for the selected watermark layer (for handle positioning)
+ */
+export function getSelectedLayerBounds(image: ImageItem): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+} | null {
+  const layerStack = image.watermarkSettings.layerStack;
+  if (!layerStack || !layerStack.selectedLayerId) return null;
+
+  const layer = layerStack.layers.find(l => l.id === layerStack.selectedLayerId);
+  if (!layer || !layer.visible) return null;
+
+  const { cropRect } = getPreviewLayout(image);
+
+  if (layer.type === 'image' && layer.imageConfig?.imageData) {
+    const scaleFactor = layer.scale / 100;
+    const watermarkWidth = cropRect.width * scaleFactor;
+    const aspectRatio = layer.imageConfig.originalHeight / layer.imageConfig.originalWidth;
+    const watermarkHeight = watermarkWidth * aspectRatio;
+
+    const pos = calculateLayerPosition(
+      cropRect.width,
+      cropRect.height,
+      watermarkWidth,
+      watermarkHeight,
+      layer
+    );
+
+    return {
+      x: cropRect.x + pos.x,
+      y: cropRect.y + pos.y,
+      width: watermarkWidth,
+      height: watermarkHeight,
+      rotation: layer.rotation,
+    };
+  } else if (layer.type === 'text' && layer.textConfig?.text) {
+    const fontSize = Math.round((layer.scale / 100) * cropRect.width * 0.1);
+    const textWidth = Math.max(60, layer.textConfig.text.length * fontSize * 0.6);
+    const textHeight = Math.max(30, fontSize * 1.2);
+
+    const pos = calculateLayerPosition(
+      cropRect.width,
+      cropRect.height,
+      textWidth,
+      textHeight,
+      layer
+    );
+
+    return {
+      x: cropRect.x + pos.x,
+      y: cropRect.y + pos.y,
+      width: textWidth,
+      height: textHeight,
+      rotation: layer.rotation,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Legacy function for backward compatibility
+ * Returns bounds for the old single-watermark system
+ */
 export function getWatermarkBounds(image: ImageItem): { x: number; y: number; width: number; height: number } | null {
+  // First try to get selected layer bounds (new system)
+  const layerBounds = getSelectedLayerBounds(image);
+  if (layerBounds) {
+    return {
+      x: layerBounds.x,
+      y: layerBounds.y,
+      width: layerBounds.width,
+      height: layerBounds.height,
+    };
+  }
+
+  // Fall back to old single-watermark system for backward compatibility
   const settings = image.watermarkSettings;
   const effectiveSettings = {
     ...settings,
@@ -299,23 +536,35 @@ function drawPreview(image: ImageItem): void {
     ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
 
     const settings = image.watermarkSettings;
-    const effectiveSettings = {
-      ...settings,
-      imageConfig: settings.imageConfig || state.globalWatermarkSettings.imageConfig,
-    };
 
     ctx.save();
     ctx.beginPath();
     ctx.rect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
     ctx.clip();
     ctx.translate(cropRect.x, cropRect.y);
-    drawWatermarkPreview(ctx, cropRect.width, cropRect.height, effectiveSettings);
+
+    // Use layer system if available, otherwise fall back to old single-watermark system
+    if (settings.layerStack && settings.layerStack.layers.length > 0) {
+      drawAllLayersPreview(ctx, settings.layerStack.layers, cropRect.width, cropRect.height);
+    } else {
+      // Legacy single-watermark drawing
+      const effectiveSettings = {
+        ...settings,
+        imageConfig: settings.imageConfig || state.globalWatermarkSettings.imageConfig,
+      };
+      drawWatermarkPreview(ctx, cropRect.width, cropRect.height, effectiveSettings);
+    }
+
     ctx.restore();
 
     if (image.cropSettings.preset !== 'original' && updateCropOverlayPositionFn) {
       updateCropOverlayPositionFn();
     }
-    if (image.watermarkSettings.position === 'custom' && positionWatermarkHandleFn) {
+
+    // Check if any layer has custom position or if using legacy custom position
+    const hasCustomPosition = settings.layerStack?.layers.some(l => l.position === 'custom') ||
+                              settings.position === 'custom';
+    if (hasCustomPosition && positionWatermarkHandleFn) {
       positionWatermarkHandleFn();
     }
   };
@@ -331,6 +580,7 @@ export function updatePreview(): void {
     elements.watermarkOverlay.style.display = 'none';
     elements.cropOverlay.style.display = 'none';
     elements.previewInfo.textContent = 'Select an image to preview';
+    updateOutputDimensionsDisplay();
     return;
   }
 
@@ -340,7 +590,10 @@ export function updatePreview(): void {
 
   drawPreview(image);
 
-  if (image.watermarkSettings.position === 'custom') {
+  // Check if any layer has custom position or if using legacy custom position
+  const hasCustomPosition = image.watermarkSettings.layerStack?.layers.some(l => l.position === 'custom') ||
+                            image.watermarkSettings.position === 'custom';
+  if (hasCustomPosition) {
     elements.watermarkOverlay.style.display = 'block';
   } else {
     elements.watermarkOverlay.style.display = 'none';
@@ -351,6 +604,31 @@ export function updatePreview(): void {
   } else {
     elements.cropOverlay.style.display = 'none';
   }
+
+  // Update output dimensions display
+  updateOutputDimensionsDisplay();
+}
+
+// ============================================================================
+// Output Dimensions Display
+// ============================================================================
+
+/**
+ * Update the output resolution display in the sidebar
+ */
+export function updateOutputDimensionsDisplay(): void {
+  const outputDisplay = elements.outputDimensions;
+  if (!outputDisplay) return;
+
+  const image = getSelectedImage();
+
+  if (!image) {
+    outputDisplay.textContent = '-- x --';
+    return;
+  }
+
+  const dims = calculateOutputDimensionsForDisplay(image, state.exportScale);
+  outputDisplay.textContent = `${dims.width} x ${dims.height}`;
 }
 
 // ============================================================================

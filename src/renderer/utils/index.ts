@@ -2,7 +2,13 @@
 // Utility Functions
 // ============================================================================
 
-import type { WatermarkSettings } from '../../types';
+import type {
+  WatermarkSettings,
+  WatermarkLayer,
+  WatermarkLayerStack,
+  ImageItem,
+} from '../../types';
+import { calculateCropArea, calculateOutputDimensions } from '../../shared/imageProcessing';
 
 // ============================================================================
 // Constants
@@ -88,6 +94,59 @@ export function deepCloneWatermarkSettings(settings: WatermarkSettings): Waterma
     ...settings,
     imageConfig: settings.imageConfig ? { ...settings.imageConfig } : undefined,
     textConfig: settings.textConfig ? { ...settings.textConfig } : undefined,
+    layerStack: settings.layerStack ? deepCloneLayerStack(settings.layerStack) : undefined,
+  };
+}
+
+/**
+ * Deep clone a single watermark layer
+ */
+export function deepCloneLayer(layer: WatermarkLayer): WatermarkLayer {
+  return {
+    ...layer,
+    imageConfig: layer.imageConfig ? { ...layer.imageConfig } : undefined,
+    textConfig: layer.textConfig ? { ...layer.textConfig } : undefined,
+  };
+}
+
+/**
+ * Deep clone a watermark layer stack
+ */
+export function deepCloneLayerStack(stack: WatermarkLayerStack): WatermarkLayerStack {
+  return {
+    layers: stack.layers.map(deepCloneLayer),
+    selectedLayerId: stack.selectedLayerId,
+  };
+}
+
+// ============================================================================
+// Output Dimension Utilities
+// ============================================================================
+
+export interface OutputDimensions {
+  width: number;
+  height: number;
+  scale: number;
+}
+
+/**
+ * Calculate the final output dimensions for an image based on crop and export settings
+ */
+export function calculateOutputDimensionsForDisplay(
+  image: ImageItem,
+  exportScale: number
+): OutputDimensions {
+  const cropArea = calculateCropArea(image.width, image.height, image.cropSettings);
+  const output = calculateOutputDimensions(
+    cropArea.width,
+    cropArea.height,
+    image.cropSettings,
+    exportScale
+  );
+  return {
+    width: output.width,
+    height: output.height,
+    scale: exportScale,
   };
 }
 

@@ -995,6 +995,176 @@ input[type="color"] {
 }
 
 /* ============================================================================
+   Layer Panel
+   ============================================================================ */
+
+.layer-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.layer-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  background: var(--color-bg-tertiary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  user-select: none;
+}
+
+.layer-item:last-child {
+  border-bottom: none;
+}
+
+.layer-item:hover {
+  background: var(--color-bg-secondary);
+}
+
+.layer-item.selected {
+  background: rgba(59, 130, 246, 0.1);
+  border-left: 3px solid var(--color-primary);
+  padding-left: calc(var(--spacing-sm) - 3px);
+}
+
+.layer-item.dragging {
+  opacity: 0.5;
+  background: var(--color-bg-secondary);
+}
+
+.layer-visibility {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  border-radius: var(--border-radius-sm);
+  transition: color var(--transition-fast), background var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.layer-visibility:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.layer-visibility.visible {
+  color: var(--color-primary);
+}
+
+.layer-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-sm);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.layer-name {
+  flex: 1;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text);
+}
+
+.layer-drag-handle {
+  cursor: grab;
+  color: var(--color-text-muted);
+  padding: var(--spacing-xs);
+  font-size: 10px;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+}
+
+.layer-drag-handle:active {
+  cursor: grabbing;
+}
+
+.layer-empty-state {
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.layer-empty-state p {
+  margin: 0;
+}
+
+.layer-empty-state .small {
+  font-size: 11px;
+  margin-top: var(--spacing-xs);
+}
+
+.layer-apply-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.layer-apply-actions .btn {
+  flex: 1;
+  font-size: 11px;
+}
+
+/* ============================================================================
+   Output Dimensions Display
+   ============================================================================ */
+
+.output-dimensions-group {
+  background: var(--color-bg-tertiary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-md);
+  border: 1px solid var(--color-border);
+}
+
+.output-dimensions-group label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--spacing-xs);
+  display: block;
+}
+
+.output-dimensions-display {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text);
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-xs);
+}
+
+.output-dimensions-unit {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-weight: normal;
+}
+
+.output-dimensions-group .help-text {
+  margin-top: var(--spacing-xs);
+  font-size: 10px;
+}
+
+/* ============================================================================
    Modal Overlays
    ============================================================================ */
 

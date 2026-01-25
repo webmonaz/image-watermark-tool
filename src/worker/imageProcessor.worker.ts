@@ -10,6 +10,7 @@ import type {
   ProcessImageMessage,
   ProcessImageResult,
   WatermarkSettings,
+  WatermarkLayer,
   ExportFormat,
 } from '../types';
 
@@ -17,6 +18,8 @@ import {
   calculateCropArea,
   calculateOutputDimensions,
   calculateWatermarkPosition,
+  calculateLayerPosition,
+  applyRotationTransform,
 } from '../shared/imageProcessing';
 
 /**
@@ -68,7 +71,7 @@ async function drawImageWatermark(
 }
 
 /**
- * Draw text watermark on canvas
+ * Draw text watermark on canvas (legacy single-watermark)
  */
 function drawTextWatermark(
   ctx: Canvas2DContext,
@@ -79,13 +82,13 @@ function drawTextWatermark(
   if (!settings.textConfig?.text) return;
 
   const config = settings.textConfig;
-  
+
   // Build font string
   const fontStyle = config.italic ? 'italic' : 'normal';
   const fontWeight = config.bold ? 'bold' : 'normal';
   const fontSize = Math.round((settings.scale / 100) * canvasWidth * 0.1); // Scale based on canvas
   const fontString = `${fontStyle} ${fontWeight} ${fontSize}px "${config.fontFamily}"`;
-  
+
   ctx.font = fontString;
   ctx.fillStyle = config.fontColor;
   ctx.globalAlpha = config.opacity / 100;
@@ -109,6 +112,137 @@ function drawTextWatermark(
   ctx.globalAlpha = 1;
 }
 
+// ============================================================================
+// Layer-based Watermark Drawing (new multi-layer system)
+// ============================================================================
+
+/**
+ * Draw a single image watermark layer with rotation support
+ */
+async function drawImageLayer(
+  ctx: Canvas2DContext,
+  layer: WatermarkLayer,
+  canvasWidth: number,
+  canvasHeight: number
+): Promise<void> {
+  if (!layer.imageConfig?.imageData) return;
+
+  const watermarkBitmap = await loadImage(layer.imageConfig.imageData);
+
+  // Calculate watermark size based on scale (percentage of canvas width)
+  const scaleFactor = layer.scale / 100;
+  const watermarkWidth = canvasWidth * scaleFactor;
+  const aspectRatio = watermarkBitmap.height / watermarkBitmap.width;
+  const watermarkHeight = watermarkWidth * aspectRatio;
+
+  // Get position
+  const { x, y } = calculateLayerPosition(
+    canvasWidth,
+    canvasHeight,
+    watermarkWidth,
+    watermarkHeight,
+    layer
+  );
+
+  ctx.save();
+
+  // Apply rotation if needed
+  if (layer.rotation !== 0) {
+    applyRotationTransform(ctx, x, y, watermarkWidth, watermarkHeight, layer.rotation);
+  }
+
+  // Draw with opacity
+  ctx.globalAlpha = layer.imageConfig.opacity / 100;
+  ctx.drawImage(watermarkBitmap, x, y, watermarkWidth, watermarkHeight);
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+
+  watermarkBitmap.close();
+}
+
+/**
+ * Draw a single text watermark layer with rotation support
+ */
+function drawTextLayer(
+  ctx: Canvas2DContext,
+  layer: WatermarkLayer,
+  canvasWidth: number,
+  canvasHeight: number
+): void {
+  if (!layer.textConfig?.text) return;
+
+  const config = layer.textConfig;
+
+  // Build font string
+  const fontStyle = config.italic ? 'italic' : 'normal';
+  const fontWeight = config.bold ? 'bold' : 'normal';
+  const fontSize = Math.round((layer.scale / 100) * canvasWidth * 0.1);
+  const fontString = `${fontStyle} ${fontWeight} ${fontSize}px "${config.fontFamily}"`;
+
+  ctx.font = fontString;
+  ctx.fillStyle = config.fontColor;
+
+  // Measure text
+  const metrics = ctx.measureText(config.text);
+  const textWidth = metrics.width;
+  const textHeight = fontSize;
+
+  // Get position
+  const { x, y } = calculateLayerPosition(
+    canvasWidth,
+    canvasHeight,
+    textWidth,
+    textHeight,
+    layer
+  );
+
+  ctx.save();
+
+  // Apply rotation if needed
+  if (layer.rotation !== 0) {
+    applyRotationTransform(ctx, x, y, textWidth, textHeight, layer.rotation);
+  }
+
+  ctx.globalAlpha = config.opacity / 100;
+  ctx.fillText(config.text, x, y + textHeight * 0.8);
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+/**
+ * Draw a single watermark layer (dispatches to image or text)
+ */
+async function drawWatermarkLayer(
+  ctx: Canvas2DContext,
+  layer: WatermarkLayer,
+  canvasWidth: number,
+  canvasHeight: number
+): Promise<void> {
+  if (!layer.visible) return;
+
+  if (layer.type === 'image') {
+    await drawImageLayer(ctx, layer, canvasWidth, canvasHeight);
+  } else if (layer.type === 'text') {
+    drawTextLayer(ctx, layer, canvasWidth, canvasHeight);
+  }
+}
+
+/**
+ * Draw all watermark layers in order (bottom to top)
+ */
+async function drawAllLayers(
+  ctx: Canvas2DContext,
+  layers: WatermarkLayer[],
+  canvasWidth: number,
+  canvasHeight: number
+): Promise<void> {
+  for (const layer of layers) {
+    await drawWatermarkLayer(ctx, layer, canvasWidth, canvasHeight);
+  }
+}
+
 /**
  * Get MIME type for export format
  */
@@ -128,14 +262,14 @@ async function processImage(message: ProcessImageMessage): Promise<ProcessImageR
   try {
     // Load the source image
     const sourceBitmap = await loadImage(message.imageData);
-    
+
     // Calculate crop area
     const cropArea = calculateCropArea(
       sourceBitmap.width,
       sourceBitmap.height,
       message.cropSettings
     );
-    
+
     // Calculate output dimensions
     const outputDims = calculateOutputDimensions(
       cropArea.width,
@@ -143,11 +277,11 @@ async function processImage(message: ProcessImageMessage): Promise<ProcessImageR
       message.cropSettings,
       message.exportScale
     );
-    
+
     // Create output canvas
     const canvas = new OffscreenCanvas(outputDims.width, outputDims.height);
     const ctx = canvas.getContext('2d');
-    
+
     if (!ctx) {
       throw new Error('Failed to get canvas context');
     }
@@ -159,11 +293,17 @@ async function processImage(message: ProcessImageMessage): Promise<ProcessImageR
       0, 0, outputDims.width, outputDims.height // Dest rect
     );
 
-    // Draw watermark
-    if (message.watermarkSettings.type === 'image') {
-      await drawImageWatermark(ctx, message.watermarkSettings, outputDims.width, outputDims.height);
-    } else if (message.watermarkSettings.type === 'text') {
-      drawTextWatermark(ctx, message.watermarkSettings, outputDims.width, outputDims.height);
+    // Draw watermarks - use new layer system if available, otherwise fall back to legacy
+    if (message.watermarkLayers && message.watermarkLayers.length > 0) {
+      // New multi-layer system
+      await drawAllLayers(ctx, message.watermarkLayers, outputDims.width, outputDims.height);
+    } else if (message.watermarkSettings) {
+      // Legacy single-watermark system (backward compatibility)
+      if (message.watermarkSettings.type === 'image') {
+        await drawImageWatermark(ctx, message.watermarkSettings, outputDims.width, outputDims.height);
+      } else if (message.watermarkSettings.type === 'text') {
+        drawTextWatermark(ctx, message.watermarkSettings, outputDims.width, outputDims.height);
+      }
     }
 
     // Convert to blob

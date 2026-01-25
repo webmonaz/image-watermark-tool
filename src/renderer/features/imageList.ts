@@ -31,6 +31,23 @@ export function setExportSingleImageFn(fn: (image: ImageItem) => Promise<void>):
   exportSingleImageFn = fn;
 }
 
+// Forward declarations for layer system
+let renderLayerListFn: (() => void) | null = null;
+let syncLayerSettingsUIFn: (() => void) | null = null;
+let updateLayerApplyButtonsFn: (() => void) | null = null;
+
+export function setRenderLayerListFn(fn: () => void): void {
+  renderLayerListFn = fn;
+}
+
+export function setSyncLayerSettingsUIFn(fn: () => void): void {
+  syncLayerSettingsUIFn = fn;
+}
+
+export function setUpdateLayerApplyButtonsFn(fn: () => void): void {
+  updateLayerApplyButtonsFn = fn;
+}
+
 // ============================================================================
 // Status Label Helpers
 // ============================================================================
@@ -289,12 +306,17 @@ export function selectImage(id: string): void {
   
   state.selectedImageId = id;
   updateImageCount();
-  
+
   // Update selection state without full re-render to preserve loading states
   updateThumbnailSelectionState();
-  
+
   syncUIWithSelectedImage();
   updatePreview();
+
+  // Update layer system UI for the new selection
+  if (renderLayerListFn) renderLayerListFn();
+  if (syncLayerSettingsUIFn) syncLayerSettingsUIFn();
+  if (updateLayerApplyButtonsFn) updateLayerApplyButtonsFn();
 }
 
 function updateThumbnailSelectionState(): void {
@@ -347,4 +369,8 @@ export function updateUI(): void {
   renderImageList();
   updatePreview();
   updateUndoRedoButtons();
+  // Update layer system UI
+  if (renderLayerListFn) renderLayerListFn();
+  if (syncLayerSettingsUIFn) syncLayerSettingsUIFn();
+  if (updateLayerApplyButtonsFn) updateLayerApplyButtonsFn();
 }

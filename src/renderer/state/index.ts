@@ -5,6 +5,8 @@
 import type {
   ImageItem,
   WatermarkSettings,
+  WatermarkLayer,
+  WatermarkLayerStack,
   ExportFormat,
   AppSettings,
   ZoomState,
@@ -17,9 +19,16 @@ import type {
 export interface HistoryEntry {
   type: 'single' | 'all';
   imageId?: string;
-  previousSettings: WatermarkSettings;
-  newSettings: WatermarkSettings;
+  /** @deprecated Use previousLayerStack instead */
+  previousSettings?: WatermarkSettings;
+  /** @deprecated Use newLayerStack instead */
+  newSettings?: WatermarkSettings;
+  /** Previous layer stack state for undo */
+  previousLayerStack?: WatermarkLayerStack;
+  /** New layer stack state for redo */
+  newLayerStack?: WatermarkLayerStack;
   allPreviousSettings?: Map<string, WatermarkSettings>;
+  allPreviousLayerStacks?: Map<string, WatermarkLayerStack>;
 }
 
 // ============================================================================
@@ -51,7 +60,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export interface AppState {
   images: ImageItem[];
   selectedImageId: string | null;
+  /** @deprecated Use globalLayerStack instead for new watermark system */
   globalWatermarkSettings: WatermarkSettings;
+  /** Global layer stack template for new images */
+  globalLayerStack: WatermarkLayerStack;
   exportFormat: ExportFormat;
   exportQuality: number;
   exportFolder: string;
@@ -90,6 +102,10 @@ export const state: AppState = {
       italic: false,
     },
   },
+  globalLayerStack: {
+    layers: [],
+    selectedLayerId: null,
+  },
   exportFormat: 'png',
   exportQuality: 85,
   exportFolder: '',
@@ -121,4 +137,35 @@ export function markUnsavedChanges(): void {
   if (!state.hasUnsavedChanges) {
     state.hasUnsavedChanges = true;
   }
+}
+
+/**
+ * Generate a unique ID for watermark layers
+ */
+export function generateLayerId(): string {
+  return `layer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Get the currently selected watermark layer from the selected image
+ */
+export function getSelectedLayer(): WatermarkLayer | undefined {
+  const image = getSelectedImage();
+  if (!image?.watermarkSettings.layerStack) return undefined;
+
+  const layerId = image.watermarkSettings.layerStack.selectedLayerId;
+  if (!layerId) return undefined;
+
+  return image.watermarkSettings.layerStack.layers.find(l => l.id === layerId);
+}
+
+/**
+ * Get the layer stack from the selected image, falling back to empty stack
+ */
+export function getSelectedImageLayerStack(): WatermarkLayerStack {
+  const image = getSelectedImage();
+  if (!image?.watermarkSettings.layerStack) {
+    return { layers: [], selectedLayerId: null };
+  }
+  return image.watermarkSettings.layerStack;
 }

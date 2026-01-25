@@ -110,6 +110,7 @@ export interface ImageWatermarkConfig {
 
 /**
  * Watermark settings (common for both types)
+ * @deprecated Use WatermarkLayerStack for new code. Kept for backward compatibility.
  */
 export interface WatermarkSettings {
   type: WatermarkType;
@@ -122,7 +123,43 @@ export interface WatermarkSettings {
   // Type-specific config
   textConfig?: TextWatermarkConfig;
   imageConfig?: ImageWatermarkConfig;
+  // New layer-based system (optional for migration compatibility)
+  layerStack?: WatermarkLayerStack;
 }
+
+/**
+ * Individual watermark layer with all settings
+ * Each layer can be either an image or text watermark
+ */
+export interface WatermarkLayer {
+  id: string;
+  name: string;                    // User-friendly name (e.g., "Logo", "Copyright Text")
+  type: WatermarkType;             // 'image' | 'text'
+  visible: boolean;                // Toggle layer visibility
+  locked: boolean;                 // Prevent editing when locked
+  position: WatermarkPosition;
+  customX: number;                 // 0-100 percentage
+  customY: number;                 // 0-100 percentage
+  scale: number;                   // 5-50 percentage of image width
+  rotation: number;                // 0-360 degrees
+  // Type-specific config (only one will be populated based on type)
+  textConfig?: TextWatermarkConfig;
+  imageConfig?: ImageWatermarkConfig;
+}
+
+/**
+ * Collection of watermark layers with ordering
+ * Layers are rendered bottom-to-top (index 0 is bottom layer)
+ */
+export interface WatermarkLayerStack {
+  layers: WatermarkLayer[];
+  selectedLayerId: string | null;
+}
+
+/**
+ * Maximum number of watermark layers allowed per image
+ */
+export const MAX_WATERMARK_LAYERS = 10;
 
 /**
  * EXIF data extracted from image
@@ -287,7 +324,10 @@ export interface ProcessImageMessage {
   imageData: string;
   imageWidth: number;
   imageHeight: number;
-  watermarkSettings: WatermarkSettings;
+  /** @deprecated Use watermarkLayers instead */
+  watermarkSettings?: WatermarkSettings;
+  /** Array of watermark layers to render (bottom-to-top order) */
+  watermarkLayers: WatermarkLayer[];
   cropSettings: CropSettings;
   exportFormat: ExportFormat;
   quality: number;

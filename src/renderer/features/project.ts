@@ -4,11 +4,12 @@
 
 import { state } from '../state';
 import { elements } from '../ui/elements';
-import { 
-  generateThumbnail, 
-  THUMBNAIL_SIZE, 
-  PREVIEW_SIZE 
+import {
+  generateThumbnail,
+  THUMBNAIL_SIZE,
+  PREVIEW_SIZE,
 } from '../utils';
+import { migrateProjectFile, ensureImageHasLayerStack } from '../utils/migration';
 import { updateUI } from './imageList';
 import { syncUIWithSelectedImage, setCachedWatermarkImage } from './preview';
 import { saveSettings, syncExportSettingsUI } from './settings';
@@ -58,7 +59,7 @@ export async function saveProject(saveAs = false): Promise<void> {
   }
   
   const projectData: ProjectFile = {
-    version: '1.0.0',
+    version: '2.0.0',
     savedAt: new Date().toISOString(),
     settings: {
       globalWatermarkSettings: state.globalWatermarkSettings,
@@ -111,14 +112,23 @@ export async function openProject(): Promise<void> {
   }
   
   try {
-    const projectData = JSON.parse(result.data) as ProjectFile;
-    
+    // Parse and migrate project data if needed
+    let projectData = JSON.parse(result.data) as ProjectFile;
+    projectData = migrateProjectFile(projectData);
+
     state.images = [];
     state.selectedImageId = null;
     state.undoStack = [];
     state.redoStack = [];
-    
-    state.globalWatermarkSettings = projectData.settings.globalWatermarkSettings;
+
+    // Ensure watermark settings have layer stack
+    state.globalWatermarkSettings = ensureImageHasLayerStack(
+      projectData.settings.globalWatermarkSettings
+    );
+    // Also update global layer stack
+    if (state.globalWatermarkSettings.layerStack) {
+      state.globalLayerStack = state.globalWatermarkSettings.layerStack;
+    }
     state.exportFormat = projectData.settings.exportFormat;
     state.exportQuality = projectData.settings.exportQuality;
     state.exportScale = projectData.settings.exportScale ?? state.settings.defaultExportScale;
@@ -150,10 +160,11 @@ export async function openProject(): Promise<void> {
           height: imgRef.height,
           thumbnailData,
           previewData,
-          watermarkSettings: imgRef.watermarkSettings,
+          watermarkSettings: ensureImageHasLayerStack(imgRef.watermarkSettings),
           cropSettings: imgRef.cropSettings,
           processed: false,
           processing: false,
+          editStatus: 'untouched',
         };
         
         state.images.push(imageItem);
@@ -230,6 +241,7 @@ export function newProject(): void {
   state.hasUnsavedChanges = false;
 
   state.globalWatermarkSettings = buildDefaultWatermarkSettings();
+  state.globalLayerStack = { layers: [], selectedLayerId: null };
   state.exportFormat = state.settings.defaultExportFormat;
   state.exportQuality = state.settings.defaultExportQuality;
   state.exportScale = state.settings.defaultExportScale;

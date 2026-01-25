@@ -3,7 +3,7 @@
 // Used by both the Web Worker and tests to ensure consistent behavior
 // ============================================================================
 
-import type { CropSettings, CropPreset, WatermarkSettings } from '../types';
+import type { CropSettings, CropPreset, WatermarkSettings, WatermarkLayer } from '../types';
 
 // ============================================================================
 // Crop Preset Definitions
@@ -171,4 +171,94 @@ export function calculateWatermarkPosition(
     default:
       return { x: padding, y: padding };
   }
+}
+
+/**
+ * Calculate watermark position for a layer (same logic, different input type)
+ */
+export function calculateLayerPosition(
+  canvasWidth: number,
+  canvasHeight: number,
+  watermarkWidth: number,
+  watermarkHeight: number,
+  layer: WatermarkLayer
+): { x: number; y: number } {
+  const padding = 20;
+
+  switch (layer.position) {
+    case 'top-left':
+      return { x: padding, y: padding };
+    case 'top-right':
+      return { x: canvasWidth - watermarkWidth - padding, y: padding };
+    case 'bottom-left':
+      return { x: padding, y: canvasHeight - watermarkHeight - padding };
+    case 'bottom-right':
+      return { x: canvasWidth - watermarkWidth - padding, y: canvasHeight - watermarkHeight - padding };
+    case 'center':
+      return {
+        x: (canvasWidth - watermarkWidth) / 2,
+        y: (canvasHeight - watermarkHeight) / 2,
+      };
+    case 'custom':
+      return {
+        x: (layer.customX / 100) * canvasWidth,
+        y: (layer.customY / 100) * canvasHeight,
+      };
+    default:
+      return { x: padding, y: padding };
+  }
+}
+
+// ============================================================================
+// Rotation Utilities
+// ============================================================================
+
+/**
+ * Calculate the bounding box of a rectangle after rotation
+ * Used to determine the final dimensions of a rotated watermark
+ */
+export function calculateRotatedBoundingBox(
+  width: number,
+  height: number,
+  rotationDegrees: number
+): { width: number; height: number } {
+  if (rotationDegrees === 0) {
+    return { width, height };
+  }
+
+  const radians = (rotationDegrees * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(radians));
+  const sin = Math.abs(Math.sin(radians));
+
+  // Calculate bounding box of rotated rectangle
+  const rotatedWidth = width * cos + height * sin;
+  const rotatedHeight = width * sin + height * cos;
+
+  return {
+    width: rotatedWidth,
+    height: rotatedHeight,
+  };
+}
+
+/**
+ * Apply rotation transform to canvas context
+ * Rotates around the center of the watermark
+ */
+export function applyRotationTransform(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  rotationDegrees: number
+): void {
+  if (rotationDegrees === 0) return;
+
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
+  const radians = (rotationDegrees * Math.PI) / 180;
+
+  ctx.translate(centerX, centerY);
+  ctx.rotate(radians);
+  ctx.translate(-centerX, -centerY);
 }

@@ -54,12 +54,52 @@ export const elements = {
   watermarkOpacity: document.getElementById('watermark-opacity') as HTMLInputElement,
   watermarkOpacityValue: document.getElementById('watermark-opacity-value') as HTMLSpanElement,
   
-  // Apply to all button
+  // Apply to all button (legacy)
   btnApplyToAll: document.getElementById('btn-apply-to-all') as HTMLButtonElement,
-  
+
+  // Layer panel
+  layerList: document.getElementById('layer-list') as HTMLDivElement,
+  btnAddImageLayer: document.getElementById('btn-add-image-layer') as HTMLButtonElement,
+  btnAddTextLayer: document.getElementById('btn-add-text-layer') as HTMLButtonElement,
+  layerApplyActions: document.querySelector('.layer-apply-actions') as HTMLDivElement,
+  btnApplyLayersToAll: document.getElementById('btn-apply-layers-to-all') as HTMLButtonElement,
+  btnApplyLayerToAll: document.getElementById('btn-apply-layer-to-all') as HTMLButtonElement,
+
+  // Layer settings panel
+  layerSettings: document.getElementById('layer-settings') as HTMLDivElement,
+  btnDeleteLayer: document.getElementById('btn-delete-layer') as HTMLButtonElement,
+  layerName: document.getElementById('layer-name') as HTMLInputElement,
+  layerPosition: document.getElementById('layer-position') as HTMLSelectElement,
+  layerScale: document.getElementById('layer-scale') as HTMLInputElement,
+  layerScaleValue: document.getElementById('layer-scale-value') as HTMLSpanElement,
+  layerRotation: document.getElementById('layer-rotation') as HTMLInputElement,
+  layerRotationValue: document.getElementById('layer-rotation-value') as HTMLSpanElement,
+  layerOpacity: document.getElementById('layer-opacity') as HTMLInputElement,
+  layerOpacityValue: document.getElementById('layer-opacity-value') as HTMLSpanElement,
+
+  // Layer image settings
+  layerImageSettings: document.getElementById('layer-image-settings') as HTMLDivElement,
+  btnChangeLayerImage: document.getElementById('btn-change-layer-image') as HTMLButtonElement,
+  layerImagePreview: document.getElementById('layer-image-preview') as HTMLDivElement,
+  layerImagePreviewImg: document.getElementById('layer-image-preview-img') as HTMLImageElement,
+
+  // Layer text settings
+  layerTextSettings: document.getElementById('layer-text-settings') as HTMLDivElement,
+  layerTextContent: document.getElementById('layer-text-content') as HTMLInputElement,
+  layerFont: document.getElementById('layer-font') as HTMLSelectElement,
+  layerColor: document.getElementById('layer-color') as HTMLInputElement,
+  layerBold: document.getElementById('layer-bold') as HTMLInputElement,
+  layerItalic: document.getElementById('layer-italic') as HTMLInputElement,
+
+  // Legacy watermark settings (hidden when using layers)
+  legacyWatermarkSettings: document.getElementById('legacy-watermark-settings') as HTMLDivElement,
+
   // Crop settings
   cropPreset: document.getElementById('crop-preset') as HTMLSelectElement,
-  
+
+  // Output dimensions display
+  outputDimensions: document.getElementById('output-dimensions') as HTMLSpanElement,
+
   // Export settings
   exportFormat: document.getElementById('export-format') as HTMLSelectElement,
   qualityControl: document.getElementById('quality-control') as HTMLDivElement,

@@ -168,8 +168,139 @@
 
         <!-- Right sidebar: Controls -->
         <aside class="sidebar sidebar-right">
-          <!-- Watermark Settings -->
+          <!-- Layer Panel -->
           <div class="control-section">
+            <div class="control-section-header">
+              <h3>Watermark Layers</h3>
+              <div class="layer-actions">
+                <button id="btn-add-image-layer" class="btn btn-secondary btn-small btn-icon-only" title="Add Image Watermark">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                </button>
+                <button id="btn-add-text-layer" class="btn btn-secondary btn-small btn-icon-only" title="Add Text Watermark">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="4 7 4 4 20 4 20 7"/>
+                    <line x1="9" y1="20" x2="15" y2="20"/>
+                    <line x1="12" y1="4" x2="12" y2="20"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div id="layer-list" class="layer-list">
+              <div class="layer-empty-state">
+                <p>No watermark layers</p>
+                <p class="small">Click + to add image or text watermark</p>
+              </div>
+            </div>
+            <div class="layer-apply-actions" style="display: none;">
+              <button id="btn-apply-layers-to-all" class="btn btn-secondary btn-small" title="Apply all layers to all images">
+                Apply All Layers
+              </button>
+              <button id="btn-apply-layer-to-all" class="btn btn-secondary btn-small" title="Apply selected layer to all images">
+                Apply Layer
+              </button>
+            </div>
+          </div>
+
+          <!-- Selected Layer Settings -->
+          <div id="layer-settings" class="control-section" style="display: none;">
+            <div class="control-section-header">
+              <h3>Layer Settings</h3>
+              <button id="btn-delete-layer" class="btn btn-secondary btn-small btn-icon-only" title="Delete selected layer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </button>
+            </div>
+
+            <div class="control-group">
+              <label for="layer-name">Name</label>
+              <input type="text" id="layer-name" placeholder="Layer name" />
+            </div>
+
+            <div class="control-group">
+              <label>Position</label>
+              <select id="layer-position">
+                <option value="bottom-right">Bottom Right (Recommended)</option>
+                <option value="bottom-left">Bottom Left</option>
+                <option value="top-right">Top Right</option>
+                <option value="top-left">Top Left</option>
+                <option value="center">Center</option>
+                <option value="custom">Custom (Drag to position)</option>
+              </select>
+            </div>
+
+            <div class="control-group">
+              <label for="layer-scale">Size: <span id="layer-scale-value">20</span>%</label>
+              <input type="range" id="layer-scale" min="5" max="50" value="20" />
+            </div>
+
+            <div class="control-group">
+              <label for="layer-rotation">Rotation: <span id="layer-rotation-value">0</span>°</label>
+              <input type="range" id="layer-rotation" min="0" max="360" value="0" />
+            </div>
+
+            <div class="control-group">
+              <label for="layer-opacity">Opacity: <span id="layer-opacity-value">80</span>%</label>
+              <input type="range" id="layer-opacity" min="10" max="100" value="80" />
+            </div>
+
+            <!-- Image layer settings -->
+            <div id="layer-image-settings" style="display: none;">
+              <div class="control-group">
+                <label>Watermark Image</label>
+                <button id="btn-change-layer-image" class="btn btn-secondary btn-small">
+                  Change Image...
+                </button>
+                <div id="layer-image-preview" class="watermark-preview" style="display: none;">
+                  <img id="layer-image-preview-img" alt="Layer image preview" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Text layer settings -->
+            <div id="layer-text-settings" style="display: none;">
+              <div class="control-group">
+                <label for="layer-text-content">Text</label>
+                <input type="text" id="layer-text-content" placeholder="Watermark text" />
+              </div>
+              <div class="control-group">
+                <label for="layer-font">Font</label>
+                <select id="layer-font">
+                  <option value="Arial">Arial</option>
+                  <option value="Helvetica Neue">Helvetica</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                  <option value="Courier New">Courier New</option>
+                  <option value="Verdana">Verdana</option>
+                  <option value="Impact">Impact</option>
+                </select>
+              </div>
+              <div class="control-row">
+                <div class="control-group">
+                  <label for="layer-color">Color</label>
+                  <input type="color" id="layer-color" value="#ffffff" />
+                </div>
+                <div class="control-group">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="layer-bold" />
+                    <span>Bold</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="layer-italic" />
+                    <span>Italic</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Legacy Watermark Settings (hidden when using layers) -->
+          <div id="legacy-watermark-settings" class="control-section" style="display: none;">
             <div class="control-section-header">
               <h3>Watermark Settings</h3>
               <button id="btn-apply-to-all" class="btn btn-secondary btn-small" disabled title="Apply current watermark settings to all images">
@@ -299,7 +430,17 @@
           <!-- Export Settings -->
           <div class="control-section">
             <h3>Export Settings</h3>
-            
+
+            <!-- Output Resolution Display -->
+            <div class="output-dimensions-group">
+              <label>Output Resolution</label>
+              <div class="output-dimensions-display">
+                <span id="output-dimensions">-- x --</span>
+                <span class="output-dimensions-unit">px</span>
+              </div>
+              <div class="help-text">Final export size after crop and scale</div>
+            </div>
+
             <div class="control-group">
               <label>Format</label>
               <div class="help-text">

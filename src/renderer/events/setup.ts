@@ -5,30 +5,47 @@
 import { state, getSelectedImage, markUnsavedChanges } from '../state';
 import { elements } from '../ui/elements';
 import { deepCloneWatermarkSettings } from '../utils';
-import { undo, redo, pushToUndoStack } from '../features/history';
-import { updatePreview, updateImageEditStatus } from '../features/preview';
-import { updateUI } from '../features/imageList';
-import { 
-  loadWatermarkImage, 
+import {
+  undo,
+  redo,
+  pushToUndoStack,
+  setRenderLayerListFn,
+  setSyncLayerSettingsUIFn,
+} from '../features/history';
+import { updatePreview, updateImageEditStatus, updateOutputDimensionsDisplay } from '../features/preview';
+import {
+  updateUI,
+  setRenderLayerListFn as setImageListRenderLayerListFn,
+  setSyncLayerSettingsUIFn as setImageListSyncLayerSettingsUIFn,
+  setUpdateLayerApplyButtonsFn,
+} from '../features/imageList';
+import {
+  loadWatermarkImage,
   updateSelectedImageWatermarkSettings,
   applyWatermarkSettingsToAll,
   hideConfirmModal,
-  getConfirmCallback
+  getConfirmCallback,
 } from '../features/watermark';
-import { 
-  updateCropOverlayPosition, 
-  getPresetAspectRatio, 
-  calculateCenteredCrop 
+import {
+  updateCropOverlayPosition,
+  getPresetAspectRatio,
+  calculateCenteredCrop,
 } from '../features/crop';
 import { exportAllImages, exportSingleImage } from '../features/export';
 import { saveProject, openProject, newProject } from '../features/project';
 import { showSettingsModal } from '../features/settings';
+import {
+  setupLayerEventListeners,
+  renderLayerList,
+  syncLayerSettingsUI,
+  updateLayerApplyButtons,
+} from '../features/layers';
 import { addImages } from './images';
-import type { 
-  WatermarkType, 
-  WatermarkPosition, 
-  CropPreset, 
-  ExportFormat 
+import type {
+  WatermarkType,
+  WatermarkPosition,
+  CropPreset,
+  ExportFormat,
 } from '../../types';
 
 // ============================================================================
@@ -37,6 +54,18 @@ import type {
 
 export function setupEventListeners(): void {
   let resizeAnimationFrame: number | null = null;
+
+  // Set up layer system callbacks for history
+  setRenderLayerListFn(renderLayerList);
+  setSyncLayerSettingsUIFn(syncLayerSettingsUI);
+
+  // Set up layer system callbacks for image list
+  setImageListRenderLayerListFn(renderLayerList);
+  setImageListSyncLayerSettingsUIFn(syncLayerSettingsUI);
+  setUpdateLayerApplyButtonsFn(updateLayerApplyButtons);
+
+  // Set up layer event listeners
+  setupLayerEventListeners();
 
   // Add images button
   elements.btnAddImages.addEventListener('click', async () => {
@@ -287,6 +316,7 @@ export function setupEventListeners(): void {
     const value = parseInt(elements.exportScale.value);
     state.exportScale = value;
     elements.exportScaleValue.textContent = value.toString();
+    updateOutputDimensionsDisplay();
   });
   
   // Cancel export
