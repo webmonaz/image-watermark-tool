@@ -32,7 +32,8 @@ src/
 │   │   ├── history.ts         # Undo/redo operations
 │   │   ├── preview.ts         # Canvas preview rendering
 │   │   ├── imageList.ts       # Sidebar image list management
-│   │   ├── watermark.ts       # Watermark loading and configuration
+│   │   ├── layers.ts          # Multi-layer watermark management
+│   │   ├── watermark.ts       # Legacy watermark + drag/resize handling
 │   │   ├── crop.ts            # Crop overlay interaction
 │   │   ├── export.ts          # Export workflow with worker
 │   │   ├── project.ts         # Project save/load
@@ -128,17 +129,37 @@ Sidebar thumbnail list management.
 
 **Dependencies:** `state`, `elements`, `utils`, `preview`
 
-### Watermark (`renderer/features/watermark.ts`)
+### Layers (`renderer/features/layers.ts`)
 
-Watermark configuration and loading.
+Multi-layer watermark management system (up to 10 layers per image).
 
 **Exports:**
-- `loadWatermarkImage()` - Load watermark image from file
-- `updateSelectedImageWatermarkSettings()` - Update watermark settings
-- `applyWatermarkSettingsToAll()` - Apply to all images
+- `addLayer()` - Add a new watermark layer (image or text)
+- `loadImageForNewLayer()` - Prompt for image then create layer
+- `selectLayer()` - Select a layer by ID
+- `moveLayer()` - Reorder layers
+- `updateSelectedLayer()` - Update selected layer properties
+- `deleteSelectedLayer()` - Remove selected layer
+- `toggleLayerVisibility()` - Show/hide layer
+- `applyAllLayersToAll()` - Copy all layers to all images
+- `applySelectedLayerToAll()` - Copy selected layer to all images
+- `renderLayerList()` - Render layer list UI
+- `syncLayerSettingsUI()` - Sync UI with selected layer
+- `setupLayerEventListeners()` - Initialize layer UI event handlers
+
+**Dependencies:** `state`, `elements`, `utils`, `preview`, `history`
+
+### Watermark (`renderer/features/watermark.ts`)
+
+Legacy single-watermark configuration and drag/resize handling.
+
+**Exports:**
+- `loadWatermarkImage()` - Load watermark image from file (legacy)
+- `updateSelectedImageWatermarkSettings()` - Update watermark settings (legacy)
+- `applyWatermarkSettingsToAll()` - Apply to all images (legacy)
 - `showConfirmModal()`, `hideConfirmModal()` - Confirmation dialog
 - `syncUIWithSelectedImage()` - Sync UI controls with image settings
-- `setupWatermarkDragging()` - Setup watermark position dragging
+- `setupWatermarkDragging()` - Setup watermark/layer position dragging (supports both systems)
 
 **Dependencies:** `state`, `elements`, `utils`, `preview`, `history`
 
@@ -305,12 +326,15 @@ setPositionWatermarkHandleFn(positionWatermarkHandle);
 5. `imageList.ts::renderImageList()` updates UI
 6. `preview.ts::updatePreview()` draws canvas
 
-### Watermark Application Flow
-1. User loads watermark image via `watermark.ts::loadWatermarkImage()`
-2. Settings stored in `state.globalWatermarkSettings`
-3. Each image gets its own copy in `image.watermarkSettings`
-4. Preview renders watermark in `preview.ts::drawWatermarkPreview()`
-5. User can drag to position (custom position mode)
+### Watermark Application Flow (Layer System)
+1. User clicks "Add Image Layer" button
+2. `layers.ts::loadImageForNewLayer()` prompts for image file
+3. Image loaded and cached via `preloadLayerImage()`
+4. Layer created with image data via `addImageLayerWithData()`
+5. Layer stored in `image.watermarkSettings.layerStack.layers[]`
+6. Preview renders all layers via `preview.ts::drawAllLayersPreview()`
+7. User can drag selected layer to reposition (switches to custom position)
+8. Layer settings (scale, rotation, opacity) adjustable via UI controls
 
 ### Export Flow
 1. User clicks "Export All"
@@ -329,7 +353,6 @@ setPositionWatermarkHandleFn(positionWatermarkHandle);
 - [ ] Add unit tests for utility functions
 - [ ] Add E2E tests for export workflow
 - [ ] Implement image reordering in sidebar
-- [ ] Add watermark rotation support
 
 ### Medium Term
 - [ ] Extract preview canvas logic to separate CanvasRenderer class
@@ -338,7 +361,8 @@ setPositionWatermarkHandleFn(positionWatermarkHandle);
 - [ ] Add image metadata preservation
 
 ### Long Term
-- [ ] Support multiple watermarks per image
+- [x] ~~Support multiple watermarks per image~~ (Implemented in v1.1.0 - multi-layer system)
+- [x] ~~Add watermark rotation support~~ (Implemented in v1.1.0)
 - [ ] Add video watermarking support
 - [ ] Cloud storage integration (optional)
 - [ ] Collaborative projects (optional)

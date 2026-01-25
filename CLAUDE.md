@@ -135,3 +135,7 @@ npm run eslint
 - Use `npm run make` to create distributable builds
 - Use `npm run package` to package the app for testing
 - Use `npm start` to run in development mode
+
+### After Completing Tasks
+- **Bump version** in `package.json` after completing feature/fix tasks
+- **Update ARCHITECTURE.md** if the changes affect module structure, dependencies, or data flow
